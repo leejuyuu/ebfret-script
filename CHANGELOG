@@ -1,6 +1,11 @@
 Changelog for hFRET project
 ===========================
 
+HEAD
+----
+
+* Moved scripts into separate dir. Removed all non-essential files
+
 0.1
 ---
 
