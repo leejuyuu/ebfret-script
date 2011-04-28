@@ -4,6 +4,7 @@ Changelog for hFRET project
 HEAD
 ----
 
+* get_ML_par: Added optional argument LP for weighting of updates using evidence
 * Moved scripts into separate dir. Removed all non-essential files
 
 0.1

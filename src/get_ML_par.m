@@ -1,4 +1,4 @@
-function [PostHpar PostPar] = get_ML_par(out,PriorPar)
+function [PostHpar PostPar] = get_ML_par(out, PriorPar, LP)
 % This function takes the posterior from a N element cell array, out, which
 % contains posterior distributions for traces which were already fit. It
 % uses thes posteriors to calculate a new set of hyperparameter priors,
@@ -25,7 +25,7 @@ K = length(out{1}.Wpi);
 IG_BAD = 1;
 
 
-% fewest number of data points allowed to be used to lear about a state
+% fewest number of data points allowed to be used to learn about a state
 MIN_DATA = 5;
 % arrays to hold parameter information
 muMtx = zeros(N,K);
@@ -44,16 +44,26 @@ end
 % if state is unpopulated in posterior, don't use it to calculate new
 % parameters
 not_empty = zeros(N,K);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% inferred parameters states by LP and Nk?
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 % array to hold weights of states (number of counts) so weighted averages
 % can be used
 wMtx = zeros(N,K);
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% inferred parameters states by number of counts in them?
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-weight = false;
+if nargin < 3
+    weight = false;
+else
+    weight = true;
+    for n = 1:N
+        LP(LP<0) = 0;
+        wMtx(n,:) = LP(n) .* out{n}.Nk(:)' ./ sum(out{n}.Nk(:)) ;
+    end
+end    
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -72,13 +82,10 @@ for n = 1:N
     
     % remember which states are populated in each trace
     not_empty(n,:) = (out{n}.beta - PriorPar.beta)' > MIN_DATA;
-    wMtx(n,:) = out{n}.Nk(:)';
     for k = 1:K
         Arows{k}(n,:) = normalise(out{n}.Wa(k,:)-PriorPar.ua(k,:));
     end        
 end
-
-
 
 for k=1:K
     if weight
