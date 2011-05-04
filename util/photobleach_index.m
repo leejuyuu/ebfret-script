@@ -14,29 +14,36 @@ function [index, d] = photobleach_index(signal, sigma, threshold)
 %   d           Detection signal 
 % 
 %  Jan-Willem van de Meent
+%  $Revision: 1.20 $  $Date: 2011/05/04$
 %  $Revision: 1.10 $  $Date: 2011/04/27$
 %  $Revision: 1.00 $  $Date: 2011/04/15$
 
 T = length(signal);
-mf = zeros(T, 1);
-sf = zeros(T, 1);
-mb = zeros(T, 1);
-sb = zeros(T, 1);
 
-for t = 1:length(signal)
-    % calculate mean and std dev
-    % of signal from start to t 
-    mf(t) = mean(signal(1:t));
-    sf(t) = std(signal(1:t));
-    % calculate mean and std dev
-    % of signal from t to end
-    mb(t) = mean(signal(t:end));
-    sb(t) = std(signal(t:end));
-end
+% (profiled out)
+% for t = 1:length(signal)
+%     % calculate mean and std dev
+%     % of signal from start to t 
+%     mf(t) = mean(signal(1:t));
+%     sf(t) = std(signal(1:t));
+%     % calculate mean and std dev
+%     % of signal from t to end
+%     mb(t) = mean(signal(t:end));
+%     sb(t) = std(signal(t:end));
+% end
+
+% forward mean: mf(t) = mean(signal(1:end))
+mf = (tril(ones(T)) * signal) ./ (1:T)';
+% foward std dev: std(signal(1:t))
+sf = sqrt((tril(ones(T)) * signal.^2) ./ (1:T)' - mf.^2);
+% backward mean: mb(t) = mean(signal(t:end))
+mb = (triu(ones(T)) * signal) ./ (T:-1:1)';
+%backward std dev: std(signal(t:end))
+sb = sqrt((triu(ones(T)) * signal.^2) ./ (T:-1:1)' - mb.^2);
 
 % create gaussian for time smoothing
 if nargin < 2
-    sigma = 1;
+    sigma = 3;
 end
 
 W = round(3 * sigma);
@@ -49,9 +56,9 @@ sb(end) = sb(end-1);
 
 % calculate forward and backward deviation
 % (convoluted with Gaussian to smoothe signal)
-df = conv((mf - signal)./sf, S);
-db = conv((signal - mb)./sb, S); 
-d = df + db;
+df = (mf - signal)./sf;
+db = (signal - mb)./sb; 
+d = conv(df + db, S);
 
 % find maximum
 [dmax,index] = max(d);
