@@ -54,14 +54,16 @@ function data = synth_data_hFRET_subpop(priors, N, T, varargin)
 %
 %    
 % Jan-Willem van de Meent
+% $Revision: 1.10 $  $Date: 2011/05/12$
 % $Revision: 1.00 $  $Date: 2011/05/12$
 
 % parse variable arguments
 ExpLength = false;
+
 for i = 1:length(varargin)
     if isstr(varargin{i})
         switch lower(varargin{i})
-        case {'ExpLength'}
+        case {'explength'}
             ExpLength = varargin{i+1};
         end
     end
