@@ -121,9 +121,15 @@ end
 PostHpar.W = lambda_var ./ (2*lambda_mean + eps);
 PostHpar.v = (lambda_mean ./ (PostHpar.W + eps))';
 
-% set beta such that mean 1/(beta*lambda_mean) = mu_var
-% --> beta = 1 /(mu_var*lambda_mean)
-PostHpar.beta = 1 ./ (mu_var .* lambda_mean + eps)';
+%% set beta such that mean 1/(beta*lambda_mean) = mu_var
+%% --> beta = 1 /(mu_var*lambda_mean)
+%
+% above update wass wrong. mu_var should be defined in terms
+% of hyperparams alone and not lambda_mean
+% 
+% mu_var = 1 / (beta * W * (v-2))
+% --> beta = 1 / (mu_var * W * (v-2))
+PostHpar.beta = 1 ./ (mu_var(:) .* PostHpar.W(:) .* (PostHpar.v(:) - 2));
 
 % mu should just be the most probable mu
 PostHpar.mu = mu_mean;
