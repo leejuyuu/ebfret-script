@@ -4,6 +4,8 @@ Changelog for hFRET project
 HEAD
 ----
 
+* synth_data_hFRET_subpop: Generates a set of synthetic traces with parameters drawn from specified priors.
+
 * __hFRET_subpop.m__: New script to detect subpopulations.
  
   1. Loads in traces from a number of '.dat' files (CSV format T rows, 2*N columns)
