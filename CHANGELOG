@@ -11,6 +11,14 @@ HEAD
 0.3 (still need to tag!)
 ------------------------
 
+* get_ML_par: Parameter update for beta was based on wrong identity for mu_var. Previous update:
+
+      beta = 1 /(mu_var*lambda_mean)
+  
+  New update:
+
+      beta = 1 / (mu_var * W * (v-2))
+
 * synth_data_hFRET_subpop: Generates a set of synthetic traces with parameters drawn from specified priors.
 
 * Added hFRET_subpop.m: New script to detect subpopulations.
