@@ -3,7 +3,10 @@ Changelog for hFRET project
 
 HEAD
 ----
+* Added tracePlotter.m: A simple GUI that allows visualisation of VBEM output for all traces in a dataset.
+
 * Added load_traces.m: A function to load in one or more datasets, remove photobleaching, as well as traces below a minimum length. 
+
 
 0.3 (still need to tag!)
 ------------------------
