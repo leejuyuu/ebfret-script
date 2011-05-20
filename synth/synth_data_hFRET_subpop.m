@@ -116,8 +116,8 @@ for n = 1:N
 	x_hat{n} = z_hat{n} * theta{n}.m';
 
 	% generate FRET levels
-	FRET{n} = ones(size(z_hat{n})) * theta{n}.m' + ...
-			  randn(size(z_hat{n})) * theta{n}.sigma';
+	FRET{n} = x_hat{n} + ...
+			  (randn(size(z_hat{n})) .* z_hat{n}) * theta{n}.sigma';
 
 	% collapse z_hat from state vector to state index
 	[z_hat{n}, tidx] = find(z_hat{n}');
