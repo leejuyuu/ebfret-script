@@ -3,6 +3,11 @@ Changelog for hFRET project
 
 HEAD
 ----
+
+* Added hstep_ml.m: A new method for doing hyperparameter updates. Instead of using the method of moments, this routine maximizes the total evidence over all traces with respect to the hyperparameters:
+
+	Grad_u Sum_n L_n = 0 
+
 * Added tracePlotter.m: A simple GUI that allows visualisation of VBEM output for all traces in a dataset.
 
 * Added load_traces.m: A function to load in one or more datasets, remove photobleaching, as well as traces below a minimum length. 
