@@ -31,5 +31,5 @@ PriorPar.mu = mu;
 PriorPar.beta = 1*ones(K,1);
 % might want to change this later
 PriorPar.W = 50*ones(1,K);
-PriorPar.v = 5*ones(K,1);
+PriorPar.v = PriorPar.beta + 1;
 PriorPar.ua = ones(K);
