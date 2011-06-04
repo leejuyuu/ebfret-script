@@ -177,7 +177,7 @@ root_fun = @(nu) E_log_g ...
                           + (E_ml.^2 ./ E_l) ...
                           + log(pi .* nu ./ E_l) ...
                           - psi(nu / 2));
-u.nu = lsqnonlin(root_fun, u_old.nu);
+u.nu = lsqnonlin(root_fun, u_old.nu, 1 + zeros(size(u_old.nu)));
 
 % (mu, lambda): Solve u.mu, u.beta and u.W
 u.mu = E_ml ./ E_l;
@@ -197,7 +197,7 @@ E_log_pi = sum([E_log_pi{:}], 2) / N;
 
 %(pi): solve system of equations
 root_fun = @(p) E_log_pi + psi(sum(p)) - psi(p);
-u.pi = lsqnonlin(root_fun, u_old.pi);
+u.pi = lsqnonlin(root_fun, u_old.pi, zeros(size(u_old.pi)) + eps);
 
 
 % A(k,:) ~ Dirichlet
@@ -210,7 +210,7 @@ E_log_A = sum(cat(3, E_log_A{:}), 3) / N;
 u.A = zeros(size(u_old.A));
 for k = 1:K
   root_fun = @(Ak) E_log_A(k,:) + psi(sum(Ak)) - psi(Ak);
-  u.A(k, :) = lsqnonlin(root_fun, u_old.A(k, :));
+  u.A(k, :) = lsqnonlin(root_fun, u_old.A(k, :), zeros(size(u_old.A(k, :))) + eps);
 end
 
 % Pack results back into legacy form
@@ -219,7 +219,7 @@ PostHPar.upi = u.pi';
 PostHPar.ua = u.A;
 PostHPar.mu = u.mu';
 PostHPar.beta = u.beta;
-PostHPar.nu = u.nu;
+PostHPar.v = u.nu;
 PostHPar.W = u.W';
 
 % Get Max Posterior Parameters (based on updated priors)
