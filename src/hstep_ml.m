@@ -1,4 +1,4 @@
-function [PostHPar PostPar] = hstep_ml(out, PriorPar)
+function [PostHPar PostPar] = hstep_ml(out, PriorPar, varargin)
 % Hyper parameter updates for Hierarchical Model Inference (HMI)
 % on a single-molecule FRET dataset.
 %
@@ -43,6 +43,11 @@ function [PostHPar PostPar] = hstep_ml(out, PriorPar)
 %   .v (Kx1)
 %       Gaussian-Gamma/Wishart prior for degrees of freedom
 %
+% Variable Inputs
+% ---------------
+%
+% 'WeighTraces' (boolean)
+%   Weigh contributions to updates by evidence (True by default)
 %
 % Outputs
 % -------
@@ -111,6 +116,17 @@ function [PostHPar PostPar] = hstep_ml(out, PriorPar)
 %
 %   psi(Sum u.pi) - psi(u.pi) = -E[log pi] 
 
+% parse variable arguments
+WeighTraces = true;
+for i = 1:length(varargin)
+    if isstr(varargin{i})
+        switch lower(varargin{i})
+        case {'weightraces'}
+            WeighTraces = varargin{i+1};
+        end
+    end
+end 
+
 % Get dimensions
 N = length(out);
 K = length(out{1}.Wpi);
@@ -124,26 +140,34 @@ u_old.beta = PriorPar.beta(:);
 u_old.nu = PriorPar.v(:);
 u_old.W = PriorPar.W(:);
 
-% Get posterior hyperparameters w = u' for q(theta)
+% get weights for updates
+if WeighTraces:
+  % weigh by evidence of each trace
+  weights = normalise(cellfun(@(o) o.F(end), out))
+else:
+  weights = ones(N,1) / N
+
+% Get posterior hyperparameters w = u' for q(theta) 
 w = struct('pi', cellfun(@(o) o.Wpi(:), out, 'UniformOutput', false), ...
            'A', cellfun(@(o) o.Wa, out, 'UniformOutput', false), ...
            'mu', cellfun(@(o) o.m(:), out, 'UniformOutput', false), ...
            'beta', cellfun(@(o) o.beta(:), out, 'UniformOutput', false), ...
            'W', cellfun(@(o) o.W(:), out, 'UniformOutput', false), ...
-           'nu', cellfun(@(o) o.v(:), out, 'UniformOutput', false));
+           'nu', cellfun(@(o) o.v(:), out, 'UniformOutput', false), ...
+           'weights', arrayfun(@(w) w, weights,'UniformOutput', false))
 
 % Init struct for updated params
 u = struct();
 
 % (mu, lambda) ~ Normal-Gamma
 % Expectation Value eta1: E[lambda] = w.nu * w.W
-E_l = arrayfun(@(w) w.nu .* w.W, w, 'UniformOutput', false);
-E_l = sum([E_l{:}], 2) / N;
+E_l = arrayfun(@(w) w.nu .* w.W .* w.wt, w, 'UniformOutput', false);
+E_l = sum([E_l{:}], 2);
 
 % (mu, lambda)
 % Expectation Value eta2: E[mu * lambda] = w.nu * w.W * w.mu
-E_ml = arrayfun(@(w) w.nu .* w.W .* w.mu, w, 'UniformOutput', false);
-E_ml = sum([E_ml{:}], 2) / N;
+E_ml = arrayfun(@(w) w.nu .* w.W .* w.mu .* w.wt, w, 'UniformOutput', false);
+E_ml = sum([E_ml{:}], 2);
 
 % (mu, lambda): For expectation values of E[log g] we use 
 %
@@ -159,12 +183,12 @@ E_ml = sum([E_ml{:}], 2) / N;
 % -(Grad_nu' f(nu', chi')) / f  =
 % - 1/2 [ 1/w.beta +  w.nu w.W w.mu^2
 %         + log(pi / w.W) - psi^0(w.nu/2) ]
-E_log_g = arrayfun(@(w) -0.5 * (1 ./ w.beta ...
+E_log_g = arrayfun(@(w) -0.5 * w.wt .* (1 ./ w.beta ...
                                + w.nu .* w.W .* w.mu.^2 ...
                                + log(pi ./ w.W) ...
                                - psi(w.nu/2)), ...
                    w, 'UniformOutput', false);
-E_log_g = sum([E_log_g{:}], 2) / N;
+E_log_g = sum([E_log_g{:}], 2);
 
 % (mu, lambda): Solve for u.nu
 %
@@ -202,9 +226,9 @@ u.pi = lsqnonlin(root_fun, u_old.pi, zeros(size(u_old.pi)) + eps);
 
 % A(k,:) ~ Dirichlet
 % E[log A(k,:)]: Same as E[log pi]
-E_log_A = arrayfun(@(w) bsxfun(@plus, -psi(sum(w.A,2)), psi(w.A)), ...
+E_log_A = arrayfun(@(w) w.wt * bsxfun(@plus, -psi(sum(w.A,2)), psi(w.A)), ...
                     w, 'UniformOutput', false);
-E_log_A = sum(cat(3, E_log_A{:}), 3) / N;
+E_log_A = sum(cat(3, E_log_A{:}), 3);
 
 %A(k,:): solve system of equations 
 u.A = zeros(size(u_old.A));
