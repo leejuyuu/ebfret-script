@@ -1,53 +1,109 @@
-function M0 = M0_from_prior(PriorPar,T)
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function w0 = init_w(u, counts)
+% w0 = init_w(u, counts)
 %
-% This function uses the hyperparameters in PriorPar to generate 
-% guesses for the starting parameters (i.e. the M0 step).
-% See equations CB 10.60-10.63 and MJB 3.54, 3.56. 
+% Initializes a first guess for the variational parameters that 
+% specify the approximating distribution for the q(theta | w0).
 %
-% Initial count matrices must sum up to the length of the trace, T.
+% This first guess is constructed by drawing a set of parameters 
+% theta = [pi, A, mu, lambda] from the priors:
 %
-% Counts are assigned evenly to all hidden states.
+%   pi ~ Dir(u.pi)
+%   A ~ Dir(u.A)
+%   mu, lambda ~ Gaussian-Wishart(u.mu, u.beta, u.W, u.nu)
 %
-% beta and v are Kx1, m is DxK, W is DxDxK.
-% Wpi is 1xK and Wa is KxK with all rows identical. 
+% These parameters are then used to update the u, weighted by
+% the specified number of pseudocounts. The initial guess is 
+% therefore analogous to the posterior after observation of a
+% time series with length T=counts and parameters theta. 
 %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+% Counts are distributed evenly between states.
+%
+%
+% Inputs
+% ------
+%
+%   u : struct
+%       Hyperparameters for prior distribution p(theta | u)
+%
+%       .A (KxK)
+%           Dirichlet prior for each row of transition matrix
+%       .pi (Kx1)
+%           Dirichlet prior for initial state probabilities
+%       .mu (KxD)
+%           Gaussian-Wishart posterior for state means 
+%       .beta (Kx1)
+%           Gaussian-Wishart posterior for state occupation count
+%       .W (KxDxD)
+%           Gaussian-Wishart posterior for state precisions
+%       .nu (Kx1)
+%           Gaussian-Wishart posterior for degrees of freedom
+%           (must be equal to beta+1)
+%
+%   counts : integer
+%       Number of pseudocounts to use for randomization. 
+%		This should be equal to the number of time points
+%       in the FRET series on which inference is performed.
+%
+%
+% Outputs
+% -------
+%
+%   w0 : struct
+%       Initial guess for variational parameters of posterior
+%       distribution q(theta | w0). Contains same fields as u.
+%
+% Jan-Willem van de Meent (modified from Jonathan Bronson)
+% $Revision: 1.00 $  $Date: 2011/08/03$
+
+% References
+% ----------
+%
+%   [Bishop] equations 10.60-1.63
+%   [Beal] equations 3.54 and 3.56
+%
+% 
+% TODO
+% ---- 
+%  * Work around use of mvnrnd (needs statistics toolbox)
+%  * When u.pi and u.A are not uniform, counts should not be evenly
+%    distributed among states.
+%  * W update is not weighted correctly in terms of counts
+%    (or indeed weighted at all)
 
 % number of states
-K = length(PriorPar.upi);
+K = length(u.pi);
+% number of time points
+T = counts;
+% signal dimension (1 for FRET or 2 for Donor/Acceptor inference)
+D = size(u.W, 2);
 
-% pi gets 1 count
-M0.upi = PriorPar.upi + dirrnd(PriorPar.upi,1);
-% beta and v just get T/K counts
-M0.beta = PriorPar.beta + T/K;
-M0.v = PriorPar.v + T/K;
-% generate precision of each state using *prior* W, v
-lambda = zeros(1,K);
-M0.ua = zeros(K);
+% add draw pi ~ Dir(u.pi) to prior with count 1
+w0.pi = u.pi + dirrnd(u.pi', 1)';
+
+% add draw A ~ Dir(u.A) to prior with count (T-1)/K for each row  
+w0.A = u.A + dirrnd(u.A) .* (T-1) ./ K;
+
+% TODO: why did JonBron add 0.1 to every element here?
+% w0.ua(k, :) = u.ua(k, :) + dirrnd(u.ua(k, :) + 0.1, 1) .* (T-1) ./ K;
+
+% add T/K counts to beta and nu
+w0.beta = u.beta + T/K;
+w0.nu = w0.beta + 1;
+
+% draw state means and emission precision matrices
+%
+%   mu ~ N(u.mu, Inv(u.beta * Lambda))
+%   Lambda ~ Wish(u.W, u.nu) for each k
+mu = zeros(K, D);
+Lambda = zeros(K, D, D);
 for k = 1:K
-    lambda(k) = wishrnd(PriorPar.W(k),PriorPar.v(k));
-    % each row of A should have (T-1)/K counts
-    M0.ua(k,:) = PriorPar.ua(k,:) + dirrnd(PriorPar.ua(k,:)+0.1,1)*(T-1)/K;
+    % draw precision matrix from wishart
+    Lambda(k, :, :) = wishrnd(u.W(k, :, :), u.nu(k));
+    % draw mu from multivariate normal
+    w_mu_k = mvnrnd(u.mu(k, :), inv(u.beta(k) * Lambda(k, :, :)));
+    % w0.mu = (u.beta * u.mu + T/K * mu) / (u.beta + T/K)
+    w0.mu(k, :) = (u.beta(k) * u.mu(k, :) + T/K * w_mu_k) / w0.beta(k);;
 end
-% set W such that Wv = covariance 
-M0.W = lambda ./ M0.v';
 
-% use covariances and *prior* beta to calculate mus
-sigma_mu = sqrt( (1 ./ (lambda .* PriorPar.beta') ) );
-
-M0.mu = sigma_mu.*randn(1,K) + PriorPar.mu;
-
-
-
-% if nargin == 1
-%     M0 = PriorPar;
-% else
-%     M0.upi = 2*PriorPar.upi;
-%     M0.mu = PriorPar.mu;
-%     M0.beta = PriorPar.beta + [20.5 28.333 84.167]';
-%     M0.v = PriorPar.v + [20.5 28.333 84.167]';
-%     M0.W = PriorPar.v' .* PriorPar.W ./M0.v';
-%     M0.ua = normalise(PriorPar.ua,2) .* [20.5 28.333 84.167; 20.5 28.333 84.167;20.5 28.333 84.167]';
-%     keyboard
-% end
+% set W such that W nu = precision 
+w0.W = bsxfun(@times, Lambda, 1 ./ w0.nu);
