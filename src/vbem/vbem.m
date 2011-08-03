@@ -274,6 +274,10 @@ for it = 1:options.maxIter
     %                              + D_kl(q(A) || p(A)) 
     %                              + D_kl(q(pi) || p(pi))
 
+    % D_KL(q(mu,L) || p(mu,L))
+    D_kl_mu_L = kl_normwish(w.mu, w.beta, w.W, w.nu, ...
+                            u.mu, u.beta, u.W, u.nu);
+
     % D_kl(q(pi) || p(pi)) = sum_l (w.pi(l) - u.pi(l)) 
     %                              (psi(w.pi(l)) - psi(u.pi(l)))
     D_kl_pi = kl_dir(w.pi, u.pi);
@@ -282,64 +286,7 @@ for it = 1:options.maxIter
     %                                (psi(w.A(k,l)) - psi(u.A(k,l)))
     D_kl_A = kl_dir(w.A, u.A);
 
-    % Calculate Dkl(q(mu, L | w) || p(mu, L | u)) 
-    for k = 1:K
-        % Log normalization const Log[B(W, nu)] for Wishart (CB B.79)
-        log_B = @(W, nu) ...
-                - (nu / 2) * log(det(W)) ...
-                - (nu * D / 2) * log(2) ...
-                - (D * (D-1) / 4) * log(pi) ...
-                - sum(gammaln(0.5 * (nu + 1 - (1:D))));
 
-        % E_q[q(mu, L | w)]
-        % =
-        % 1/2 E_q[log |L|]
-        % + D log(w.beta / (2*pi)) 
-        % - 1/2 D
-        % + log(B(w.W, w.nu))
-        % + 1/2 (w.nu - D - 1) * E_q[log |L|]
-        % - 1/2 w.nu D
-        E_log_NW_w(k) = 0.5 * E_ln_det_L(k) ...        
-                        + 0.5 * D * log(w.beta(k) / (2*pi)) ...
-                        - 0.5 * D ...
-                        + log_B(w.W(k,:,:), w.nu(k)) ...
-                        + 0.5 * (w.nu(k)-D-1) * E_ln_det_L(k) ...
-                        - 0.5 * w.nu(k) * D;
-
-        % E_q[log[Norm(mu | u.mu, u.beta L)]
-        % =
-        %   1/2 D log(u.beta / 2 pi) 
-        %   + 1/2 E_q[log |L|]
-        %   - 1/2 u.beta (D / w.beta + E_q[(mu-u.mu)^T L (mu-u.mu)])  
-        E_log_Norm_u(k) = 0.5 * (D * log(u.beta(k) / (2*pi)) ...
-                                 + E_ln_det_L(k) ... 
-                                 - D * u.beta(k) ./ w.beta(k) ...
-                                 - u.beta(k) .* w.nu(k) ... 
-                                   * (w.mu(k,:)-u.mu(k,:))' ...
-                                   * w.W(k,:,:) ...
-                                   * (w.mu(k,:)-u.mu(k,:)));
-
-        % E_q[log[Wish(L | u.W, u.nu)]
-        % =
-        % log(B(u.W, u.nu)) 
-        % + 1/2 (u.nu - D - 1) E_q[log |L|]
-        % - 1/2 w.nu Tr[Inv(u.W) * w.W]
-        E_log_Wish_u(k) = log_B(u.W(k, :, :), u.nu(k)) ...
-                          + 0.5 * (u.nu(k) - D - 1) .* E_ln_det_L(k) ...
-                          - 0.5 * w.nu(k) * trace(inv(u.W(k,:,:)) ...
-                                                 * w.W(k,:,:));
-
-        % E_q[p(mu, L | u)]
-        % = 
-        % E_q[log[Norm(mu | u.mu, u.beta L)]
-        % + E_q[log[Wish(L | u.W, u.nu)]
-        E_log_NW_u(k) = E_log_Norm_u(k) + E_log_Wish_u(k);
-
-        % Dkl(q(mu, L | w) || p(mu, L | u)) 
-        % =
-        % E_q[log q(mu, L | w)] - E_q[log p(mu, L | u)]
-        D_kl_mu_L(k) = E_log_NW_w(k) - E_log_NW_u(k);    
-    end
 
     % L = ln(Z) - D_kl(q(theta | w) || p(theta | u))
     L(it) = log(Z) - sum(D_kl_mu_L) - sum(D_kl_A) - sum(D_kl_pi);
