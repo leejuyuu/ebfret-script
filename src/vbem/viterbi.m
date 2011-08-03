@@ -1,4 +1,4 @@
-function [z_hat x_hat]=chmmViterbi(out,x)
+function [z_hat x_hat] = viterbi(w, x)
 
 % function z_hat=chmmViterbi(out,x)
 %
@@ -61,23 +61,22 @@ function [z_hat x_hat]=chmmViterbi(out,x)
 % creates a lot of warning messages.
 warning('off','MATLAB:log:logOfZero')
 
-[D K] = size(out.m);
+[K D] = size(w.mu);
 T = length(x);
 omega = zeros(T,K);
 bestPriorZ = zeros(T,K);
 z_hat = zeros(1,T);
 
 % Get parameters from out structure
-pZ0 = normalise(out.Wpi);
-A = out.Wa;
+pZ0 = normalise(w.pi);
 % Convert A from matrix of counts to a probablity matrix
-A = normalise(A,2);
-mus = out.m; 
-W = out.W; 
-v = out.v; 
-covarMtx = zeros(D,D,K);
+A = normalise(w.A,2);
+mus = w.mu; 
+W = w.W; 
+v = w.nu; 
+covarMtx = zeros(K,D,D);
 for k=1:K
-    covarMtx(:,:,k)=(inv(W(k))/(v(k)-D-1));
+    covarMtx(k, :, :)=(inv(W(k, :, :))/(v(k)-D-1));
 end
 
 
@@ -85,7 +84,7 @@ end
 % omega(z1) = ln(p(z1)) + ln(p(x1|z1))
 % CB 13.69
 for k=1:K
-   omega(1,k)= log(pZ0(k))+log(gauss(mus(:,k), covarMtx(:,:,k),x(:,1)'));
+   omega(1,k)= log(pZ0(k))+log(gauss(mus(k,:), covarMtx(k,:,:),x(1,:)'));
 end
 
 % arbitrary value, since there is no predecessor to t=1
@@ -97,7 +96,7 @@ bestPriorZ(1,:)=0;
 for t=2:T
     for k=1:K
         [omega(t,k) bestPriorZ(t,k)] =max(log(A(:,k)')+omega(t-1,:));
-        omega(t,k) = omega(t,k)+ log(gauss(mus(:,k), covarMtx(:,:,k),x(:,t)'));
+        omega(t,k) = omega(t,k)+ log(gauss(mus(k,:), covarMtx(k,:,:),x(t,:)'));
     end
 end
     
@@ -105,6 +104,6 @@ end
 for t=(T-1):-1:1
     z_hat(t) = bestPriorZ(t+1,z_hat(t+1));
 end
-x_hat=mus(:,z_hat)';
+x_hat=mus(z_hat,:)';
 
 warning('on','MATLAB:log:logOfZero')
