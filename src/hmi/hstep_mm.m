@@ -1,8 +1,8 @@
-function [PostHpar PostPar] = get_ML_par(out, PriorPar, LP)
+function u_new = hstep_mm(w, u, stat, L)
 % This function takes the posterior from a N element cell array, out, which
 % contains posterior distributions for traces which were already fit. It
 % uses thes posteriors to calculate a new set of hyperparameter priors,
-% PostHpar,
+% u_new,
 % which reflect the mean and standard deviation of the N posteriors. Best
 % fit parameters (i.e. most likely hidden state means, stdevs and
 % transition frequencies) are also returned in the structure PostPar.
@@ -13,9 +13,9 @@ function [PostHpar PostPar] = get_ML_par(out, PriorPar, LP)
 %                           %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-N = length(out);
-% K is the same for each out{n}, since 1 set of hparms should be used
-K = length(out{1}.Wpi);
+N = length(w);
+% K is the same for each w(n), since 1 set of hparms should be used
+K = length(w(1).pi);
 
 % Flag: if set to 1, when calculating sufficient statistics ignore:
 % 1.    traces where the order of the states fit does not match the order
@@ -55,13 +55,13 @@ not_empty = zeros(N,K);
 % can be used
 wMtx = zeros(N,K);
 
-if nargin < 3
+if nargin < 4
     weight = false;
 else
     weight = true;
+    L(L<0) = 0;
     for n = 1:N
-        LP(LP<0) = 0;
-        wMtx(n,:) = LP(n) .* out{n}.Nk(:)' ./ sum(out{n}.Nk(:)) ;
+        wMtx(n,:) = L(n) .* stat(n).G(:)' ./ sum(stat(n).G(:)) ;
     end
 end    
 
@@ -75,15 +75,15 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 for n = 1:N
-    piMtx(n,:) = out{n}.Wpi - PriorPar.upi;
-    muMtx(n,:) = out{n}.xbar;
+    piMtx(n,:) = w(n).pi - u.pi;
+    muMtx(n,:) = stat(n).xmean;
     % take mode
-    lambdaMtx(n,:) = squeeze(out{n}.S)'.^-1;
+    lambdaMtx(n,:) = squeeze(stat(n).xvar)'.^-1;
     
     % remember which states are populated in each trace
-    not_empty(n,:) = (out{n}.beta - PriorPar.beta)' > MIN_DATA;
+    not_empty(n,:) = (w(n).beta - u.beta)' > MIN_DATA;
     for k = 1:K
-        Arows{k}(n,:) = normalise(out{n}.Wa(k,:)-PriorPar.ua(k,:));
+        Arows{k}(n,:) = normalise(w(n).A(k,:)-u.A(k,:));
     end        
 end
 
@@ -118,8 +118,8 @@ end
 % mean of lambda = vW
 % v = mean/W --> variance = 2*mean*W
 % W = variance / (2*mean)
-PostHpar.W = lambda_var ./ (2*lambda_mean + eps);
-PostHpar.v = (lambda_mean ./ (PostHpar.W + eps))';
+u_new.W = lambda_var ./ (2*lambda_mean + eps);
+u_new.nu = (lambda_mean ./ (u_new.W + eps))';
 
 %% set beta such that mean 1/(beta*lambda_mean) = mu_var
 %% --> beta = 1 /(mu_var*lambda_mean)
@@ -129,10 +129,10 @@ PostHpar.v = (lambda_mean ./ (PostHpar.W + eps))';
 % 
 % mu_var = 1 / (beta * W * (v-2))
 % --> beta = 1 / (mu_var * W * (v-2))
-PostHpar.beta = 1 ./ (mu_var(:) .* PostHpar.W(:) .* (PostHpar.v(:) - 2));
+u_new.beta = 1 ./ (mu_var(:) .* u_new.W(:) .* (u_new.nu(:) - 2));
 
 % mu should just be the most probable mu
-PostHpar.mu = mu_mean;
+u_new.mu = mu_mean;
 
 % for dirichlet, total counts should be given by V_k = M_k(1-M_k) / 
 % (a*+1), where M_k is
@@ -143,7 +143,7 @@ sum_alpha = [pi_mean .* (1-pi_mean) ./ (pi_var + eps)] - 1;
 sum_alpha = mean(sum_alpha(isfinite(sum_alpha)));
 
 %a_k = mean_k*sum_alpha
-PostHpar.upi = pi_mean * sum_alpha;
+u_new.pi = pi_mean * sum_alpha;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -151,7 +151,7 @@ PostHpar.upi = pi_mean * sum_alpha;
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-PostHpar.ua = zeros(K);
+u_new.A = zeros(K);
 for k = 1:K
     A_mean = zeros(1,K);
     A_var = zeros(1,K);
@@ -169,7 +169,7 @@ for k = 1:K
     end
     sum_alpha = [A_mean .* (1-A_mean) ./ (A_var + eps)] - 1;
     sum_alpha = mean(sum_alpha(isfinite(sum_alpha)));
-    PostHpar.ua(k,:) = A_mean * sum_alpha;    
+    u_new.A(k,:) = A_mean * sum_alpha;    
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -179,53 +179,53 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % set all NaNs in mu to 10 
-PostHpar.mu(isnan(PostHpar.mu)) = 10;
+u_new.mu(isnan(u_new.mu)) = 10;
 
 % fix v/w too small
-vw_issues = PostHpar.v < 5 | isnan(PostHpar.v) | PostHpar.v > 1e3;
+vw_issues = u_new.nu < 5 | isnan(u_new.nu) | u_new.nu > 1e3;
 if any(vw_issues)
-    disp(sprintf('Warning: vw_issue. v:%s W:%s',num2str(PostHpar.v','%g'),num2str(PostHpar.W,'%g')))
-    PostHpar.v(vw_issues) = 5;
-    PostHpar.W(vw_issues) = 50;
+    disp(sprintf('Warning: vw_issue. v:%s W:%s',num2str(u_new.nu','%g'),num2str(u_new.W,'%g')))
+    u_new.nu(vw_issues) = 5;
+    u_new.W(vw_issues) = 50;
 end
 
 % make sure beta is at least 0.1
-PostHpar.beta(PostHpar.beta < 0.1 | isnan(PostHpar.beta)) = 0.1;
-PostHpar.beta(PostHpar.beta > 1e3) = 1e3;
+u_new.beta(u_new.beta < 0.1 | isnan(u_new.beta)) = 0.1;
+u_new.beta(u_new.beta > 1e3) = 1e3;
 
 % make sure no NaNs in upi
-PostHpar.upi(isnan(PostHpar.upi)) = 1e-10;
+u_new.pi(isnan(u_new.pi)) = 1e-10;
 % make sure sum(upi) > 1 
-if sum(PostHpar.upi) < 1
-    PostHpar.upi = normalise(PostHpar.upi);
+if sum(u_new.pi) < 1
+    u_new.pi = normalise(u_new.pi);
 end
 % every entry should be at least 0.001
-PostHpar.upi(PostHpar.upi < 0.001) = 0.001;
-if max(PostHpar.upi) > 100
-    PostHpar.upi = PostHpar.upi / (max(PostHpar.upi)/100);
+u_new.pi(u_new.pi < 0.001) = 0.001;
+if max(u_new.pi) > 100
+    u_new.pi = u_new.pi / (max(u_new.pi)/100);
 end
     
 % same deal for rows of ua
 
 % make sure no NaNs in ua
-PostHpar.ua(isnan(PostHpar.ua)) = 1e-10;
-PostHpar.ua(PostHpar.ua < 1e-10) = 1e-10;
+u_new.A(isnan(u_new.A)) = 1e-10;
+u_new.A(u_new.A < 1e-10) = 1e-10;
 
 % make sure sum(ua(k,:)) > 1 
 
 for k = 1:K
-    if sum(PostHpar.ua(k,:),2) < 1 || sum(PostHpar.ua(k,:),2)/k > 1e3
-        disp(sprintf('Warning: ua issue. ua(%d,:) = %s',k,num2str(PostHpar.ua(k,:))))
-        if sum(PostHpar.ua(k,:)) < 1
-            PostHpar.ua(k,:) = normalise(PostHpar.ua(k,:),2);
+    if sum(u_new.A(k,:),2) < 1 || sum(u_new.A(k,:),2)/k > 1e3
+        disp(sprintf('Warning: ua issue. ua(%d,:) = %s',k,num2str(u_new.A(k,:))))
+        if sum(u_new.A(k,:)) < 1
+            u_new.A(k,:) = normalise(u_new.A(k,:),2);
         else
-            PostHpar.ua(k,:) = PostHpar.ua(k,:) / (max(PostHpar.ua(k,:))/1e3);
+            u_new.A(k,:) = u_new.A(k,:) / (max(u_new.A(k,:))/1e3);
         end
     end
 end
 
 % every entry should be at least 0.001
-PostHpar.ua(PostHpar.ua < 0.001) = 0.001;
+u_new.A(u_new.A < 0.001) = 0.001;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -235,18 +235,23 @@ PostHpar.ua(PostHpar.ua < 0.001) = 0.001;
 
 mlA = zeros(k);
 for n=1:N
-    mlA = mlA + out{n}.Wa - PriorPar.ua;
+    mlA = mlA + w(n).A - u.A;
 end
 mlA = normalise(mlA,2);
 
-PostPar.m = mu_mean;
-PostPar.sigma = sqrt(1./lambda_mean);
-PostPar.pi = normalise(PostHpar.upi); 
-PostPar.A = mlA;
-PostPar.Wa = PostHpar.ua;
-PostPar.Wan = normalise(PostHpar.ua,2);
+u_new = struct('mu', u_new.mu(:), ...
+               'beta', u_new.beta(:), ...
+               'nu', u_new.nu(:), ...
+               'W', u_new.W(:), ...
+               'pi', u_new.pi(:), ...
+               'A', u_new.A);
 
-
+% PostPar.m = mu_mean;
+% PostPar.sigma = sqrt(1./lambda_mean);
+% PostPar.pi = normalise(u_new.pi); 
+% PostPar.A = mlA;
+% PostPar.Wa = u_new.A;
+% PostPar.Wan = normalise(u_new.A,2);
 
 % mu_mean = mean(muMtx);
 % mu_var = var(muMtx);
