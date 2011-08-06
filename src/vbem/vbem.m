@@ -71,6 +71,9 @@ function [w, L, stat] = vbem(x, w0, u, options)
 %               xi(t, k, l) = E_q(z)[z(t, k) z(t+1, l)]  
 %                           = p(z(t)=k, z(t+1)=l | x(1:T))
 %
+%       Z : float
+%           Normalization constant of q(z).
+%           
 %       G : (K x 1)
 %           State occupation count Sum_t gamma(t, k)
 %
@@ -131,8 +134,8 @@ function [w, L, stat] = vbem(x, w0, u, options)
 % -------
 %
 % This code is a rewrite of Jonathan Bronson's vbFRET project. The vbFRET
-% project in turn borrows heavily from Matthew Beal's VBEM code for HMM's
-% with discrete emission probabilities 
+% project in turn borrows from Matthew Beal's VBEM code for HMM's
+% with discrete emission probabilities. 
 %
 % References
 % ----------
@@ -162,7 +165,7 @@ if nargin < 4
     options = struct();
 end
 if ~isfield(options, 'threshold')    
-    options.maxIter = 1e-5;
+    options.threshold = 1e-5;
 end
 if ~isfield(options, 'maxIter')    
     options.maxIter = 100;
@@ -379,8 +382,8 @@ for it = 1:options.maxIter
     end
 
     % print warning if lower bound decreses
-    if it>2 && (L(it) < L(it-1) - eps) 
-        fprintf('Warning!!: Lower bound decreased by %f \n', ...
+    if it>2 && (L(it) < (1 - 10*options.threshold) * L(it-1)) 
+        fprintf('Warning!!: Lower bound decreased by %e \n', ...
                 L(it) - L(it-1));
     end
 
@@ -473,6 +476,7 @@ end
 stat = struct();
 stat.gamma = g;
 stat.xi = xi;
+stat.Z = Z;
 stat.G = G;
 stat.xmean = xmean;
 stat.xvar = xvar;
