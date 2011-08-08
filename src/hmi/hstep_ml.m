@@ -30,19 +30,19 @@ function u_new = hstep_ml(w, u)
 %       Variational parameters of approximate posterior distribution 
 %       for parameters q(theta | w), for each of N traces 
 %
-%       .mu (K x D)
-%           Normal-Wishart prior - state means 
-%       .beta (K x 1)
-%           Normal-Wishart prior - state occupation count
-%       .nu (K x 1)
-%           Normal-Wishart prior - degrees of freedom
-%           (must be equal to beta+1)
-%       .W (K x D x D)
-%           Normal-Wishart prior - state precisions
 %       .A (K x K)
 %           Dirichlet prior for each row of transition matrix
 %       .pi (K x 1)
 %           Dirichlet prior for initial state probabilities
+%       .mu (K x D)
+%           Normal-Wishart prior - state means 
+%       .beta (K x 1)
+%           Normal-Wishart prior - state occupation count
+%       .W (K x D x D)
+%           Normal-Wishart prior - state precisions
+%       .nu (K x 1)
+%           Normal-Wishart prior - degrees of freedom
+%           (must be equal to beta+1)
 %
 %   u : struct 
 %       Hyperparameters for the prior distribution p(theta | u)
@@ -121,7 +121,6 @@ end
 
 % Init struct for updated params
 u_old = u;
-u = struct();
 
 % (mu, lambda) ~ Normal-Gamma
 % Expectation Value eta1: E[lambda] = w.nu * w.W
@@ -214,12 +213,15 @@ for k = 1:K
                         opts);
 end
 
-u_new = struct('mu', u.mu, ...
-               'beta', u.beta, ...
-               'nu', u.nu, ...
-               'W', u.W, ...
-               'pi', u.pi, ...
-               'A', u.A);
+u_new = u;
+
+% u_new = struct('mu', u.mu, ...
+%                'beta', u.beta, ...
+%                'nu', u.nu, ...
+%                'W', u.W, ...
+%                'pi', u.pi, ...
+%                'A', u.A);
+
 
 % % Get Max Posterior Parameters (based on updated priors)
 % % (this is a pain)
