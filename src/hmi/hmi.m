@@ -128,11 +128,6 @@ for i = 1:length(varargin)
     end
 end 
 
-% TODO: make options for these
-verbose = true;
-R = 20;
-threshold = 1e-5;
-
 % get dimensions
 N = length(data);
 K = length(u0.pi);
