@@ -131,6 +131,7 @@ end
 % get dimensions
 N = length(data);
 K = length(u0.pi);
+R = restarts;
 
 converged = false;
 it = 1;
