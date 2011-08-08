@@ -174,7 +174,9 @@ while ~converged
     % calculate summed evidence
     sL(it) = sum(cellfun(@(l) l(end), {L{it,:}}));
 
-    fprintf('iteration: %d, L: %e\n', it, sL(it))
+    if verbose
+        fprintf('hmi iteration: %d, L: %e\n', it, sL(it));
+    end    
 
     % check for convergence
     if it > 1
