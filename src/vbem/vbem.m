@@ -27,11 +27,11 @@ function [w, L, stat] = vbem(x, w0, u, options)
 %           Normal-Wishart prior - state means 
 %       .beta (K x 1)
 %           Normal-Wishart prior - state occupation count
+%       .W (K x D x D)
+%           Normal-Wishart prior - state precisions
 %       .nu (K x 1)
 %           Normal-Wishart prior - degrees of freedom
 %           (must be equal to beta+1)
-%       .W (K x D x D)
-%           Normal-Wishart prior - state precisions
 %
 %   w0 : struct 
 %       Initial guess for the variational parameters of the 
