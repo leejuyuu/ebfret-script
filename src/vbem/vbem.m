@@ -175,8 +175,7 @@ end
 [T D] = size(x);
 K = length(u.pi);
 
-% move this down
-Fold = -Inf;
+% set w to initial guess
 w = w0;
 
 if Debug
