@@ -71,8 +71,8 @@ function [w, L, stat] = vbem(x, w0, u, options)
 %               xi(t, k, l) = E_q(z)[z(t, k) z(t+1, l)]  
 %                           = p(z(t)=k, z(t+1)=l | x(1:T))
 %
-%       Z : float
-%           Normalization constant of q(z).
+%       ln_Z : float
+%           Log normalization constant of q(z).
 %           
 %       G : (K x 1)
 %           State occupation count Sum_t gamma(t, k)
@@ -272,7 +272,7 @@ for it = 1:options.maxIter
     %   pi* = exp(E[ln pi])
     %   A* = exp(E[ln A])
     %   p*(x | z, theta) = E[p(x | z, theta)]
-    [g, xi, Z] = forwback(E_p_x_z, exp(E_ln_A), exp(E_ln_pi));  
+    [g, xi, ln_Z] = forwback(E_p_x_z, exp(E_ln_A), exp(E_ln_pi));  
 
     % COMPUTE LOWER BOUND L
     %
@@ -371,10 +371,10 @@ for it = 1:options.maxIter
     D_kl_mu_L = E_log_NW_w - E_log_NW_u;    
 
     % L = ln(Z) - D_kl(q(theta | w) || p(theta | u))
-    L(it) = log(Z) - sum(D_kl_mu_L) - sum(D_kl_A) - sum(D_kl_pi);
+    L(it) = ln_Z - sum(D_kl_mu_L) - sum(D_kl_A) - sum(D_kl_pi);
 
     if Debug
-        iter(it).ln_Z = log(Z);
+        iter(it).ln_Z = ln_Z;
         iter(it).D_kl_mu_L = D_kl_mu_L;
         iter(it).D_kl_A = -D_kl_A;
         iter(it).D_kl_pi = -D_kl_pi;
@@ -475,7 +475,7 @@ end
 stat = struct();
 stat.gamma = g;
 stat.xi = xi;
-stat.Z = Z;
+stat.ln_Z = ln_Z;
 stat.G = G;
 stat.xmean = xmean;
 stat.xvar = xvar;
@@ -485,7 +485,7 @@ if Debug
     fprintf(['\nRUN SUMMARY:\n', ...
              '  iterations   ', sprintf('%d', it), '\n', ...
              '  F:           ', sprintf('% 7.1e', L(end)), '\n', ...
-             '    ln(Z):     ', sprintf('% 7.1e', log(Z)), '\n', ...
+             '    ln(Z):     ', sprintf('% 7.1e', ln_Z), '\n', ...
              '    D_kl_mu_l: ', sprintf('% 7.1e  ', D_kl_mu_L),'\n', ...
              '    D_kl_A:    ', sprintf('% 7.1e  ', D_kl_A),'\n', ...
              '    D_kl_pi:   ', sprintf('% 7.1e', D_kl_pi), '\n\n']);

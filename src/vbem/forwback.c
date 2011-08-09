@@ -110,21 +110,21 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 		}
 	}
 
-	// allocate outputs: g, xi, px
+	// allocate outputs: g, xi, lnZ
 	int xi_dims[3] = {T-1, K, K}; 
-	mxArray *g_out_m, *xi_out_m, *px_out_m; 
+	mxArray *g_out_m, *xi_out_m, *lnZ_out_m; 
 	plhs[0] = mxCreateDoubleMatrix(T, K, mxREAL);
 	g_out_m = plhs[0];
 	plhs[1] = mxCreateNumericArray(3, xi_dims, mxDOUBLE_CLASS, mxREAL);
 	xi_out_m = plhs[1];
 	plhs[2] = mxCreateDoubleMatrix(1, 1, mxREAL);
-	px_out_m = plhs[2];
+	lnZ_out_m = plhs[2];
 
 	// get pointers to outputs
-	double *g, *xi, *px;
+	double *g, *xi, *lnZ;
     g = mxGetPr(g_out_m);
     xi = mxGetPr(xi_out_m);
-    px = mxGetPr(px_out_m);
+    lnZ = mxGetPr(lnZ_out_m);
 
 	// g(t,k) = a(t,k) * b(t,k)
 	for (i=0; i<T*K; i++)
@@ -147,11 +147,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 		}
 	}
 
-	// px = prod_t c[t]
-	px[0] = 1;
+	// ln_Z = sum_t log(c[t])
+	lnZ[0] = 0;
 	for (t=0; t<T; t++)
 	{
-		px[0] *= c[t];
+		lnZ[0] += log(c[t]);
 	}
 
 	return;

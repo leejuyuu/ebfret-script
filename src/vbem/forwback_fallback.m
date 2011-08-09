@@ -1,5 +1,5 @@
-function  [gamma, xi, px] = forwback(px_z, A, pi)
-% [gamma, xi, px] = forwback(px_z, A, pi)
+function  [gamma, xi, ln_Z] = forwback(px_z, A, pi)
+% [gamma, xi, ln_Z] = forwback(px_z, A, pi)
 %          
 % Performs forward-backward message passing for HMMs.
 % 
@@ -31,11 +31,11 @@ function  [gamma, xi, px] = forwback(px_z, A, pi)
 %       Posterior joint probabilities for states
 %         p(z(t+1)=l, z(t)=k | x(1:T))  =  xi(t, k, l)
 %
-%   px : float
-%       Normalization constant p(x(1:T) | theta)
+%   ln_Z : float
+%       Log normalization constant Z = p(x(1:T) | theta)
 %
-% Jan-Willem van de Meent (modified from Matthew Beal and Jonathan Bronson)
-% $Revision: 1.00 $  $Date: 2011/08/03$
+% Jan-Willem van de Meent 
+% $Revision: 1.2$  $Date: 2011/08/08$
 
 % get dimensions
 K = size(A, 1);
@@ -92,5 +92,5 @@ xi = bsxfun(@times, ...
 
 % Evidence
 %
-% px = p(x(1:T)) = Prod_t c(t)
-px = prod(c);
+% Ln Z = Ln[p(x(1:T))] = Sum_t log(c(t))
+ln_Z = sum(log(c));

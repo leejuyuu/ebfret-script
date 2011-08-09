@@ -1,5 +1,5 @@
-function  [gamma, xi, px] = forwback(px_z, A, pi)
-% [gamma, xi, px] = forwback(px_z, A, pi)
+function  [gamma, xi, ln_Z] = forwback(px_z, A, pi)
+% [gamma, xi, ln_Z] = forwback(px_z, A, pi)
 %          
 % Performs forward-backward message passing for HMMs.
 % (implemented in C)
@@ -32,10 +32,10 @@ function  [gamma, xi, px] = forwback(px_z, A, pi)
 %       Posterior joint probabilities for states
 %         p(z(t+1)=l, z(t)=k | x(1:T))  =  xi(t, k, l)
 %
-%   px : float
-%       Normalization constant p(x(1:T) | theta)
+%   ln_Z : float
+%       Log normalization constant Z = p(x(1:T) | theta)
 %
 % Jan-Willem van de Meent 
-% $Revision: 1.1$  $Date: 2011/08/04$
+% $Revision: 1.2$  $Date: 2011/08/08$
 
 % SEE forwback.c for implementation
