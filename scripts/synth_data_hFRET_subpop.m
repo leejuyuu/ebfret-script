@@ -1,13 +1,13 @@
-function data = synth_data_hFRET_subpop(priors, N, T, varargin)
+function data = synth_data_hFRET_subpop(u, N, T, varargin)
 % Generates a synthetic set of FRET traces from a set of priors
 %
 % Inputs
 % ------
 %
-% priors (struct)
-%   .ua (KxK)
+% u (struct)
+%   .A (KxK)
 %       Dirichlet prior for each row of transition matrix
-%   .upi (1xK)
+%   .pi (1xK)
 %       Dirichlet prior for initial state probabilities
 %   .mu (1xK)
 %       Gaussian-Gamma/Wishart prior for state means 
@@ -15,7 +15,7 @@ function data = synth_data_hFRET_subpop(priors, N, T, varargin)
 %       Gaussian-Gamma/Wishart prior for state occupation count 
 %   .W (1xK)
 %       Gaussian-Gamma/Wishart prior for state precisions
-%   .v (Kx1)
+%   .nu (Kx1)
 %       Gaussian-Gamma/Wishart prior for degrees of freedom
 %
 % N
@@ -77,25 +77,25 @@ else
 end
 
 % loop over traces
-K = length(priors.mu);
+K = length(u.mu);
 for n = 1:N
-	% sample parameters from priors
+	% sample parameters from u
 	theta{n} = struct('A', zeros(K,K), ...
 	                  'pi', zeros(1,K), ...
 	                  'm', zeros(1,K), ...
 	                  'sigma', zeros(1,K));
 	% initial probabilities 
-	theta{n}.pi = dirrnd(priors.upi);
+	theta{n}.pi = dirrnd(u.pi);
 	% loop over states
 	for k = 1:K
 		%disp(sprintf('[debug] n: %d, k: %d', n, k))
 		% transition matrix row k 
-		theta{n}.A(k, :) = dirrnd(priors.ua(k, :));
+		theta{n}.A(k, :) = dirrnd(u.A(k, :));
 		% emission model std dev
-		theta{n}.sigma(k) = 1 ./ sqrt(wishrnd(priors.W(k), priors.v(k)));
+		theta{n}.sigma(k) = 1 ./ sqrt(wishrnd(u.W(k), u.nu(k)));
 		% emission model state mean
-		theta{n}.m(k) = priors.mu(k) + randn() ...
-		                .* (theta{n}.sigma(k) ./ sqrt(priors.beta(k)));
+		theta{n}.m(k) = u.mu(k) + randn() ...
+		                .* (theta{n}.sigma(k) ./ sqrt(u.beta(k)));
 	end
 
 	% generate trace states 
