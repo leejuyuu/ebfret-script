@@ -7,13 +7,13 @@ function data = synth_data_hFRET_subpop(u, N, T, varargin)
 % u (struct)
 %   .A (KxK)
 %       Dirichlet prior for each row of transition matrix
-%   .pi (1xK)
+%   .pi (Kx1)
 %       Dirichlet prior for initial state probabilities
-%   .mu (1xK)
+%   .mu (Kx1)
 %       Gaussian-Gamma/Wishart prior for state means 
 %   .beta (Kx1)
 %       Gaussian-Gamma/Wishart prior for state occupation count 
-%   .W (1xK)
+%   .W (Kx1x1)
 %       Gaussian-Gamma/Wishart prior for state precisions
 %   .nu (Kx1)
 %       Gaussian-Gamma/Wishart prior for degrees of freedom
@@ -54,8 +54,7 @@ function data = synth_data_hFRET_subpop(u, N, T, varargin)
 %
 %    
 % Jan-Willem van de Meent
-% $Revision: 1.10 $  $Date: 2011/05/12$
-% $Revision: 1.00 $  $Date: 2011/05/12$
+% $Revision: 1.2$  $Date: 2011/08/10$
 
 % parse variable arguments
 ExpLength = false;
@@ -85,7 +84,7 @@ for n = 1:N
 	                  'm', zeros(1,K), ...
 	                  'sigma', zeros(1,K));
 	% initial probabilities 
-	theta{n}.pi = dirrnd(u.pi);
+	theta{n}.pi = dirrnd(u.pi');
 	% loop over states
 	for k = 1:K
 		%disp(sprintf('[debug] n: %d, k: %d', n, k))
