@@ -38,9 +38,9 @@ function data = synth_data_hFRET_subpop(priors, N, T, varargin)
 % data (Nx1 struct)
 %   .FRET (Tx1)
 %		Synthetically generated FRET trace
-%	.z_hat (Tx1)
+%	.z (Tx1)
 %		State index at each time point for each trace
-%	.x_hat (Tx1)
+%	.x (Tx1)
 %		State FRET level at each time point for each trace
 % 	.theta (struct)
 %		.A (KxK)
@@ -99,31 +99,31 @@ for n = 1:N
 	end
 
 	% generate trace states 
-	% (note: z_hat{n}(t) is a K element vector with elements 
+	% (note: z{n}(t) is a K element vector with elements 
 	% delta(i, k) if in state i at time t) 
-	z_hat{n} = zeros(Tn(n), K);
+	z{n} = zeros(Tn(n), K);
 	% initial state (sample from multinomial)
-	z_hat{n}(1, :) = mnrnd(1, theta{n}.pi);
+	z{n}(1, :) = mnrnd(1, theta{n}.pi);
 	% loop over time points
 	% todo: could vectorise this but prob not worth it
 	for t = 2:Tn(n)
 		% sample from multinomial using transition matrix 
 		% row of prev state
-		z_hat{n}(t, :) = mnrnd(1, theta{n}.A(find(z_hat{n}(t-1, :)), :));
+		z{n}(t, :) = mnrnd(1, theta{n}.A(find(z{n}(t-1, :)), :));
 	end
 
-	% generate x_hat levels
-	x_hat{n} = z_hat{n} * theta{n}.m';
+	% generate x levels
+	x{n} = z{n} * theta{n}.m';
 
 	% generate FRET levels
-	FRET{n} = x_hat{n} + ...
-			  (randn(size(z_hat{n})) .* z_hat{n}) * theta{n}.sigma';
+	FRET{n} = x{n} + ...
+			  (randn(size(z{n})) .* z{n}) * theta{n}.sigma';
 
-	% collapse z_hat from state vector to state index
-	[z_hat{n}, tidx] = find(z_hat{n}');
+	% collapse z from state vector to state index
+	[z{n}, tidx] = find(z{n}');
 end
 
 data = struct('FRET', FRET, ...
-              'z_hat', z_hat, ...
-              'x_hat', x_hat, ...
+              'z', z, ...
+              'x', x, ...
               'theta', theta);
