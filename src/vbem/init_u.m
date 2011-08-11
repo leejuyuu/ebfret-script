@@ -1,4 +1,4 @@
-function u = init_u(K,varargin)
+function u = init_u(K, varargin)
 % u = init_u(K, varargin)
 %
 % Initializes a set of hyperparameters u used to define the prior 
