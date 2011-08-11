@@ -109,7 +109,7 @@ K = length(w(1).pi);
 % % get weights for updates
 % if WeighTraces
 %   % weigh by evidence of each trace
-%   weights = normalise(cellfun(@(o) o.F(end), out));
+%   weights = normalize(cellfun(@(o) o.F(end), out));
 % else
 %   weights = ones(N,1) / N;
 % end
@@ -247,7 +247,7 @@ u_new = u;
 
 % % Pack MAP results
 % w = struct();
-% w.pi = normalise(W.pi);
-% w.A = normalise(W.A, 2); 
+% w.pi = normalize(W.pi);
+% w.A = normalize(W.A, 2); 
 % w.mu = W.mu;
 % w.sigma = 1./sqrt(W.nu .* W.W);
