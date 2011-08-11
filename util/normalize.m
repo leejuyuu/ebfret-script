@@ -5,8 +5,8 @@ function [A0, C] = normalize(A, dim)
 % along single axis if dim is specified, or along all axes if not.
 if nargin < 2
   C = sum(A(:));
-  A = A ./ (C + (C==0));  
+  A0 = A ./ (C + (C==0));  
 else
   C = sum(A, dim);
-  A = bsxfun(@rdivide, A, C + (C==0));
+  A0 = bsxfun(@rdivide, A, C + (C==0));
 end
