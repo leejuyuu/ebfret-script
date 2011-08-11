@@ -81,10 +81,10 @@ function [w, L, stat] = vbem(x, w0, u, options)
 %           Expectation of emission means under gamma(t, k)
 %             xmean(k, d) = E_t[x(t, d)] 
 %
-%       xsigma : (K x D x D)
+%       xvar : (K x D x D)
 %           Expectation of emission variances under gamma(t, k)
-%             xsigma(k, d, e) = E_t[(x(t, d) - xmean(k)) 
-%                                   (x(t, e) - xmean(k))]
+%             xvar(k, d, e) = E_t[(x(t, d) - xmean(k)) 
+%                                 (x(t, e) - xmean(k))]
 %
 % Jan-Willem van de Meent (modified from Matthew Beal and Jonathan Bronson)
 % $Revision: 1.00 $  $Date: 2011/08/03$
