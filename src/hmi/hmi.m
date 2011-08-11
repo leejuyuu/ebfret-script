@@ -28,11 +28,11 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %         Normal-Wishart prior - state means 
 %     .beta : (K x 1)
 %         Normal-Wishart prior - state occupation count
+%     .W : (K x D x D)
+%         Normal-Wishart prior - state precisions
 %     .nu : (K x 1)
 %         Normal-Wishart prior - degrees of freedom
 %         (must be equal to beta+1)
-%     .W : (K x D x D)
-%         Normal-Wishart prior - state precisions
 %
 %
 % Variable Inputs
@@ -43,9 +43,13 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %     'ml' for maximum likelihood, 'mm' for method of moments.
 %
 %   restarts : int
-%     Number of restarts to perform when determining initial values
-%     for the variational parameters w (before starting hierarchical
-%     updates)
+%     Number of VBEM restarts to perform when to determine the 
+%     optimal values for the variational parameters w.
+%
+%   do_restarts : 'init', 'always'
+%     Specifies whether restarts should be performed only when 
+%     determining the initial value of w (default, faster), or at 
+%     every hierarchical iteration (more accurate).
 %
 %   threshold : float
 %     Convergence threshold. Execution halts when fractional increase 
@@ -103,16 +107,17 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 % parse variable arguments
 hstep = 'ml';
 restarts = 20;
+do_restarts = 'init';
 threshold = 1e-5;
 verbose = false;
 for i = 1:length(varargin)
     if isstr(varargin{i})
         switch lower(varargin{i})
         case {'hstep'}
-            method = varargin{i+1};
-            switch lower(method)
+            val = lower(varargin{i+1});
+            switch val
             case {'ml','mm'}
-                hstep = varargin{i+1};
+                hstep = method;
             otherwise
                 err = MException('HMI:HstepUnknown', ...
                                  'hstep must be one of ''ml'' or ''mm''');
@@ -120,6 +125,12 @@ for i = 1:length(varargin)
             end
         case {'restarts'}
             restarts = varargin{i+1};
+        case {'do_restarts'}
+            val = lower(varargin{i+1});
+            switch val
+            case {'init', 'always'}
+                do_restarts = val;
+            end
         case {'threshold'}
             threshold = varargin{i+1};
         case {'verbose'}
@@ -131,40 +142,39 @@ end
 % get dimensions
 N = length(data);
 K = length(u0.pi);
-R = restarts;
 
 converged = false;
 it = 1;
 u(it) = u0;
 while ~converged
     % initialize guesses for w    
-    if it == 1
+    if (it == 1) | strcmp(do_restarts, 'always')
+        % randomize guess w0 for each restart
+        R = restarts;
         for n = 1:N
-            % if verbose
-            %     fprintf('it: 00, n: %03d\n', n);
-            % end
-            % run vbem restarts and keep best result
-            Lm = -inf;
             for r = 1:R
-                w0_ = init_w(u0, length(data{n}));
-                [w_, L_, stat_] = vbem(data{n}, w0_, u0);
-                if L_(end) > Lm
-                    w0(n) = w_;
-                    Lm = L_(end);
-                end
-            end 
+                w0(n, r) = init_w(u0, length(data{n}));
+            end
         end
     else
-        % use output from last iteration as initial guess
-        w0 = w(it-1, :);
+        % only do one restart and use w from last iteration as guess
+        R = 1;
+        w0(:, 1) = w(it-1, :);
     end
 
     % run vbem on each trace 
     for n = 1:N
-        % if verbose
-        %     fprintf('it: %02d, n: %03d\n', it, n);
-        % end
-        [w(it,n), L{it,n}, stat(it,n)] = vbem(data{n}, w0(n), u(it));
+        L{it,n} = [-Inf];
+        % loop over restarts
+        for r = 1:R
+            [w_, L_, stat_] = vbem(data{n}, w0(n,r), u(it));
+            % keep result if L better than previous restarts
+            if L_(end) > L{it, n}(end)
+                w(it, n) = w_;
+                L{it, n} = L_;
+                stat(it, n) = stat_;
+            end
+        end
     end
 
     % calculate summed evidence
@@ -185,8 +195,6 @@ while ~converged
     end
 
     % run hierarchical updates
-    %u(it+1) = hstep_mm(w(it,:), u(it), stat(it,:));
-    %dbstop in hstep_ml at 216
     if strcmp(hstep, 'ml')
       u(it+1) = hstep_ml(w(it,:), u(it));
     else
