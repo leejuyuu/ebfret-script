@@ -83,15 +83,15 @@ for n = 1:N
     % remember which states are populated in each trace
     not_empty(n,:) = (w(n).beta - u.beta)' > MIN_DATA;
     for k = 1:K
-        Arows{k}(n,:) = normalise(w(n).A(k,:)-u.A(k,:));
+        Arows{k}(n,:) = normalize(w(n).A(k,:)-u.A(k,:));
     end        
 end
 
 for k=1:K
     if weight
         w_vec = wMtx(not_empty(:,k)==1,k);
-        mu_mean(k) = sum(muMtx(not_empty(:,k)==1,k).*normalise(w_vec));
-        lambda_mean(k) = sum(lambdaMtx(not_empty(:,k)==1,k).*normalise(w_vec));
+        mu_mean(k) = sum(muMtx(not_empty(:,k)==1,k).*normalize(w_vec));
+        lambda_mean(k) = sum(lambdaMtx(not_empty(:,k)==1,k).*normalize(w_vec));
     else
         w_vec = 0;
         mu_mean(k) = mean(muMtx(not_empty(:,k)==1,k));
@@ -158,7 +158,7 @@ for k = 1:K
     if weight
         for kk=1:K
             w_vec = wMtx(not_empty(:,kk)==1,k);
-            A_mean(kk) = sum(Arows{k}(not_empty(:,kk)==1,kk).*normalise(w_vec));
+            A_mean(kk) = sum(Arows{k}(not_empty(:,kk)==1,kk).*normalize(w_vec));
             A_var(kk) = var(Arows{k}(not_empty(:,kk)==1,kk),w_vec);
         end
     else
@@ -197,7 +197,7 @@ u_new.beta(u_new.beta > 1e3) = 1e3;
 u_new.pi(isnan(u_new.pi)) = 1e-10;
 % make sure sum(upi) > 1 
 if sum(u_new.pi) < 1
-    u_new.pi = normalise(u_new.pi);
+    u_new.pi = normalize(u_new.pi);
 end
 % every entry should be at least 0.001
 u_new.pi(u_new.pi < 0.001) = 0.001;
@@ -217,7 +217,7 @@ for k = 1:K
     if sum(u_new.A(k,:),2) < 1 || sum(u_new.A(k,:),2)/k > 1e3
         disp(sprintf('Warning: ua issue. ua(%d,:) = %s',k,num2str(u_new.A(k,:))))
         if sum(u_new.A(k,:)) < 1
-            u_new.A(k,:) = normalise(u_new.A(k,:),2);
+            u_new.A(k,:) = normalize(u_new.A(k,:),2);
         else
             u_new.A(k,:) = u_new.A(k,:) / (max(u_new.A(k,:))/1e3);
         end
@@ -237,7 +237,7 @@ mlA = zeros(k);
 for n=1:N
     mlA = mlA + w(n).A - u.A;
 end
-mlA = normalise(mlA,2);
+mlA = normalize(mlA,2);
 
 u_new = struct('mu', u_new.mu(:), ...
                'beta', u_new.beta(:), ...
@@ -248,10 +248,10 @@ u_new = struct('mu', u_new.mu(:), ...
 
 % PostPar.m = mu_mean;
 % PostPar.sigma = sqrt(1./lambda_mean);
-% PostPar.pi = normalise(u_new.pi); 
+% PostPar.pi = normalize(u_new.pi); 
 % PostPar.A = mlA;
 % PostPar.Wa = u_new.A;
-% PostPar.Wan = normalise(u_new.A,2);
+% PostPar.Wan = normalize(u_new.A,2);
 
 % mu_mean = mean(muMtx);
 % mu_var = var(muMtx);

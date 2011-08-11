@@ -8,9 +8,9 @@ function [z_hat x_hat] = viterbi(w, x)
 % from out.
 %
 % Inputs:
-%     pZ0 (1xK) = normalise(out.Wpi) = p(Z(1) = i)
+%     pZ0 (1xK) = normalize(out.Wpi) = p(Z(1) = i)
 %     A (KxK) = transition matrix. A(i,j) = Pr(Z(t+1)=j | Z(t)=i) =
-%       normalise(out.Wa,2)
+%       normalize(out.Wa,2)
 %     mus (DxK) = out.m = guessed gaussian means
 %     W (DxDxK) = out.W = Wishart parameter
 %     v (Kx1) = out.v = Wishart parameter 
@@ -68,9 +68,9 @@ bestPriorZ = zeros(T,K);
 z_hat = zeros(1,T);
 
 % Get parameters from out structure
-pZ0 = normalise(w.pi);
+pZ0 = normalize(w.pi);
 % Convert A from matrix of counts to a probablity matrix
-A = normalise(w.A,2);
+A = normalize(w.A,2);
 mus = w.mu; 
 W = w.W; 
 v = w.nu; 
