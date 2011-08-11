@@ -117,7 +117,7 @@ for i = 1:length(varargin)
             val = lower(varargin{i+1});
             switch val
             case {'ml','mm'}
-                hstep = method;
+                hstep = val;
             otherwise
                 err = MException('HMI:HstepUnknown', ...
                                  'hstep must be one of ''ml'' or ''mm''');
