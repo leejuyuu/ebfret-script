@@ -85,7 +85,7 @@ end
 %   p(z(1) = k | u.pi)  =  pi(k)  ~  Dir(u.pi)
 %
 % make this uniform
-u.pi = ones(1, K);
+u.pi = ones(K, 1);
 
 % Prior for transition probabilities 
 %
