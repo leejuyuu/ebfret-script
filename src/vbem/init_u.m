@@ -143,7 +143,7 @@ u.beta = ones(K, 1);
 %
 %    <lambda> = nu * W = 400
 %    <sigma> = 1./sqrt(<lambda>) = 0.05
-u.W = 400 ./ u.nu; 
+u.W = 400 ./ (u.beta + 1); 
 
 % nu: fully determined by beta
 u.nu = u.beta + 1;
