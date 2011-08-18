@@ -130,12 +130,13 @@ switch(mu_type)
             % calculate spacing between states
             dmu = abs(bsxfun(@minus, mu, mu'));
         end
-end        
+end      
+
+% set mu  
+u.mu = mu;
 
 % beta: uniform, one count for each state 
 u.beta = ones(K, 1);
-% nu: fully determined by beta
-u.nu = u.beta + 1;
 
 % W: set uniformly to 400 / nu. This implies implies an expectation value for 
 % the emission noise of 0.05
@@ -143,3 +144,6 @@ u.nu = u.beta + 1;
 %    <lambda> = nu * W = 400
 %    <sigma> = 1./sqrt(<lambda>) = 0.05
 u.W = 400 ./ u.nu; 
+
+% nu: fully determined by beta
+u.nu = u.beta + 1;
