@@ -61,7 +61,7 @@ function u = init_u(K, varargin)
 
 
 % Parse variable arguments
-mu_type = 'random'
+mu_type = 'random';
 for i = 1:length(varargin)
     if isstr(varargin{i})
         switch lower(varargin{i})
@@ -85,7 +85,7 @@ end
 %   p(z(1) = k | u.pi)  =  pi(k)  ~  Dir(u.pi)
 %
 % make this uniform
-u.pi = ones(1,K);
+u.pi = ones(1, K);
 
 % Prior for transition probabilities 
 %
@@ -113,8 +113,8 @@ switch(mu_type)
         while min(dmu(:) < 0.02)
             % generate a set of random mu values
             mu = rand(K, 1);
-            % calculate spacing between states
-            dmu = abs(bsxfun(@minus, mu, mu'));
+            % calculate spacing between states (adding ones to diagonal)
+            dmu = abs(bsxfun(@minus, mu, mu')) + eye(K);
         end
         % output values in ascending order
         mu = sort(mu);
