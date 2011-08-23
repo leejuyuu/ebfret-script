@@ -58,6 +58,9 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %   verbose : boolean
 %     Print status information.
 %
+%   maxiter : int (default 100)
+%     Maximum number of iterations 
+%
 % Outputs
 % -------
 %
@@ -110,6 +113,7 @@ restarts = 20;
 do_restarts = 'init';
 threshold = 1e-5;
 verbose = false;
+maxiter = 100;
 for i = 1:length(varargin)
     if isstr(varargin{i})
         switch lower(varargin{i})
@@ -135,6 +139,9 @@ for i = 1:length(varargin)
             threshold = varargin{i+1};
         case {'verbose'}
             verbose = varargin{i+1};
+        end
+        case {'maxiter'}
+            maxiter = varargin{i+1};
         end
     end
 end 
@@ -167,7 +174,7 @@ while ~converged
         L{it,n} = [-Inf];
         % loop over restarts
         for r = 1:R
-            [w_, L_, stat_] = vbem(data{n}, w0(n,r), u(it));
+            [w_, L_, stat_] = vbem(data{n}, w0(n,r), u(it), 'maxiter', maxiter);
             % keep result if L better than previous restarts
             if L_(end) > L{it, n}(end)
                 w(it, n) = w_;
@@ -186,7 +193,7 @@ while ~converged
 
     % check for convergence
     if it > 1
-        if (sL(it) - sL(it-1)) < (threshold * sL(it-1))
+        if (sL(it) - sL(it-1)) < (threshold * sL(it-1)) | it > maxiter
             if sL(it) < sL(it-1)
               it = it-1;
             end
