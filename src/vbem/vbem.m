@@ -381,7 +381,7 @@ for it = 1:options.maxIter
     end
 
     % print warning if lower bound decreases
-    if it>2 && (L(it) - L(it-1)) < -10 * options.threshold) * abs(L(it)) 
+    if it>2 && ((L(it) - L(it-1)) < -10 * options.threshold * abs(L(it))) 
         fprintf('Warning!!: Lower bound decreased by %e \n', ...
                 L(it) - L(it-1));
     end
