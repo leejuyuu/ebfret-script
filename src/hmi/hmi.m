@@ -139,7 +139,7 @@ for i = 1:length(varargin)
             threshold = varargin{i+1};
         case {'verbose'}
             verbose = varargin{i+1};
-        case {'maxIter'}
+        case {'maxiter'}
             maxIter = varargin{i+1};
         end
     end
@@ -170,7 +170,7 @@ while ~converged
 
     % run vbem on each trace 
     options.threshold = threshold;
-    options.maxIter; 
+    options.maxIter = maxIter; 
     for n = 1:N
         L{it,n} = [-Inf];
         % loop over restarts
