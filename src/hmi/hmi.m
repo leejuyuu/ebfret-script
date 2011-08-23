@@ -139,7 +139,6 @@ for i = 1:length(varargin)
             threshold = varargin{i+1};
         case {'verbose'}
             verbose = varargin{i+1};
-        end
         case {'maxiter'}
             maxiter = varargin{i+1};
         end
