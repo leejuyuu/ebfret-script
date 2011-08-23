@@ -380,8 +380,8 @@ for it = 1:options.maxIter
         iter(it).D_kl_pi = -D_kl_pi;
     end
 
-    % print warning if lower bound decreses
-    if it>2 && (L(it) < (1 - 10*options.threshold) * L(it-1)) 
+    % print warning if lower bound decreases
+    if it>2 && (L(it) - L(it-1)) < -10 * options.threshold) * abs(L(it)) 
         fprintf('Warning!!: Lower bound decreased by %e \n', ...
                 L(it) - L(it-1));
     end
