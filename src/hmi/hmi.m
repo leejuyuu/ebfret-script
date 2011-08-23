@@ -170,7 +170,7 @@ while ~converged
 
     % run vbem on each trace 
     options.threshold = threshold;
-    optoins.maxIter; 
+    options.maxIter; 
     for n = 1:N
         L{it,n} = [-Inf];
         % loop over restarts
