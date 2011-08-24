@@ -155,10 +155,12 @@ u(it) = u0;
 while ~converged
     % initialize guesses for w    
     if (it == 1) | strcmp(do_restarts, 'always')
-        % randomize guess w0 for each restart
         R = restarts;
         for n = 1:N
-            for r = 1:R
+            % do not randomize first restart
+            w0(n, 1) =  init_w(u0, length(data{n}), 'randomize', false);
+            for r = 2:R
+                % randomize guess w0 for other restarts
                 w0(n, r) = init_w(u0, length(data{n}));
             end
         end
@@ -172,6 +174,9 @@ while ~converged
     options.threshold = threshold;
     options.maxIter = maxIter; 
     for n = 1:N
+        % if verbose
+        %     fprintf('hmi init: n = %d\n', n);
+        % end
         L{it,n} = [-Inf];
         % loop over restarts
         for r = 1:R
@@ -189,12 +194,12 @@ while ~converged
     sL(it) = sum(cellfun(@(l) l(end), {L{it,:}}));
 
     if verbose
-        fprintf('hmi iteration: %d, L: %e\n', it, sL(it));
+        fprintf('hmi iteration: %d, L: %e, rel increase: %.2e\n', it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it));
     end    
 
     % check for convergence
     if it > 1
-        if (sL(it) - sL(it-1)) < (threshold * sL(it-1)) | it > maxIter
+        if (sL(it) - sL(it-1)) < threshold * abs(sL(it-1)) | it > maxIter
             if sL(it) < sL(it-1)
               it = it-1;
             end
