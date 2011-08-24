@@ -1,5 +1,5 @@
-function u = init_u(K, varargin)
-% u = init_u(K, varargin)
+function u = init_u(K, counts, varargin)
+% u = init_u(K, counts, varargin)
 %
 % Initializes a set of hyperparameters u used to define the prior 
 % distribution p(theta | u).
@@ -11,22 +11,22 @@ function u = init_u(K, varargin)
 %   K : int
 %       Number of states.
 %
+%	counts : int
+%		Strength of prior, specified in number of pseudocounts,
+%		e.g. the number of virtual obeservations that have informed
+%		the prior. 
 %
 % Variable Inputs
 % ---------------
 %
-% 'mu' : string
-%   Specifies type of prior on levels of states.
-%       
-%       'linear'
-%           Evenly spaced values mu = (1:K) / (K+1)
+% 'sep' : float (default 0.02)
+%   Minimum separation of states.
 %
-%       'random'
-%           Take K random values between 0 and 1, with a minimum
-%           separation of 0.02.
-%       
-%       'rand_ends'
-%           Evenly space values between a random minimum and maximum.
+% 'min' : float (default 0)
+%   Minimum level for states.
+%
+% 'max' : float (default 1)
+%   Maximum level for states.
 %
 % Outputs
 % -------
@@ -58,85 +58,67 @@ function u = init_u(K, varargin)
 % * This function currently does not support D=2 donor/acceptor inference
 %   (have no idea how to set priors for mu for this case)
 
-
-
 % Parse variable arguments
-mu_type = 'random';
+sep_mu = 0.02;
+min_mu = 0;
+max_mu = 1;
 for i = 1:length(varargin)
     if isstr(varargin{i})
         switch lower(varargin{i})
-        case {'mu'}
-            mu_type = lower(varargin{i+1});
-            valid_types = {'linear', 'random', 'rand_ends'};
-            % check whether mu_type has a valid value
-            valid = arrayfun(@(t) strcmp(mu_type, valid_types(i)), ... 
-                             1:length(mu_types));
-            if ~any(valid)
-                err = MException('init_u:invalid_mu_type', ...
-                                 '[init_u] Error: ''mu'' must be one of {''linear'', ''random'', ''randend''}');
-                throw(err)
-            end 
+        case {'sep'}
+            sep_mu = varargin{i+1};
+        case {'min'}
+            min_mu = varargin{i+1};
+        case {'max'}
+            max_mu = varargin{i+1};
         end
     end
 end 
 
 % Prior for initial probabilities 
 %
-%   p(z(1) = k | u.pi)  =  pi(k)  ~  Dir(u.pi)
+%   p(z(1) = k | u.pi)  =  pi(k)
 %
-% make this uniform
-u.pi = ones(K, 1);
+% make this uniform with one count
+u.pi = ones(K, 1) ./ K;
 
 % Prior for transition probabilities 
 %
-%   p(z(t)=l | z(t-1)=k)  =  A(k, l)  ~  Dir(u.A)
+%   p(z(t)=l | z(t-1)=k)  =  A(k, l)
 %
-% make this uniform too.
-u.A = ones(K);
+% uniform distribtuion of counts
+u.A = counts * ones(K, K) / K^2;
 
-% Prior for emission model state levels and precision
+% Prior for emission model parameters
 %
-%   lambda(k) ~ Wishart(u.nu(k), u.W(k))
-%   mu(k) ~ Normal(u.mu(k), 1/(u.beta(k) lambda(k)))
-%
-%   p(x(t) | z(t)=k)  =  Normal(mu(k), 1/lambda(k))
+% p(x(t) | z(t)=k) = Norm(x(t) | mu(k), Lambda(k))
 
-% mu: choice between 'linear', 'random', and 'rand_ends'
-switch(mu_type)
-    case {'linear'}
-        % linearly space states between 1/(K+1) and K/(K+1)
-        mu = (1:K)'/(K+1);
+% range of mu values
+rng_mu = (max_mu - min_mu);
 
-    case {'random'}
-        % ensure spacing of states is at least  0.02
-        dmu = zeros(K, K);
-        while min(dmu(:) < 0.02)
-            % generate a set of random mu values
-            mu = rand(K, 1);
-            % calculate spacing between states (adding ones to diagonal)
-            dmu = abs(bsxfun(@minus, mu, mu')) + eye(K);
-        end
-        % output values in ascending order
-        mu = sort(mu);
+% check whether minimum separation of states fits into range
+if sep_mu > rng_mu / (K-1)
+    warning(['Minimum separation of states ''sep_mu = %.2f'' is too',
+             'large for specified range. Setting ''sep_mu = %.2f''.'], ... 
+             sep_mu, rng_mu / (K-1));
+    sep_mu = rng_mu / (K-1);
+end
 
-    case {'rand_ends'}
-        % ensure spacing of states is at least  0.02
-        dmu = zeros(K, K);
-        while min(dmu(:) < 0.02)
-            % generate a set of random mu values
-            mu = rand(K, 1);
-            % now space evenly between min and max
-            mu = linspace(min(mu), max(mu), K);
-            % calculate spacing between states
-            dmu = abs(bsxfun(@minus, mu, mu'));
-        end
-end      
+if sep_mu > 0
+    % draw K+1 intervals from dirichlet, such that intervals
+    % add up to specified range, discounted for minimum sep 
+    int_mu = (rng_mu - (K - 1) * sep_mu) * dirrnd(ones(1, K + 1));
+    mu = cumsum(int_mu(1:K))' + sep_mu * (0:(K-1))';
+else
+    % take evenly spaced fret levels over range
+    mu = min_mu + sep_mu * (0:(K-1))';
+end 
 
 % set mu  
 u.mu = mu;
 
-% beta: uniform, one count for each state 
-u.beta = ones(K, 1);
+% beta: uniform distribution of counts
+u.beta = counts * ones(K, 1) / K;
 
 % W: set uniformly to 400 / nu. This implies implies an expectation value for 
 % the emission noise of 0.05
