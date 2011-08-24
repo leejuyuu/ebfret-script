@@ -1,5 +1,5 @@
-function w0 = init_w(u, counts)
-% w0 = init_w(u, counts)
+function w0 = init_w(u, counts, varargin)
+% w0 = init_w(u, counts, varargin)
 %
 % Initializes a first guess for the variational parameters that 
 % specify the approximating distribution for the q(theta | w0).
@@ -44,6 +44,14 @@ function w0 = init_w(u, counts)
 %		This should be equal to the number of time points
 %       in the FRET series on which inference is performed.
 %
+% Variable Inputs
+% ---------------
+%
+% 	randomize : boolean (default true)
+%		If set to true, a set of random parameters is drawn from the 
+%       prior and use to generate the pseudocounts. If set to false,
+%		the pseudocounts are obtained using the expectation values of
+% 		theta under the prior.
 %
 % Outputs
 % -------
@@ -70,6 +78,17 @@ function w0 = init_w(u, counts)
 %  * W update is not weighted correctly in terms of counts
 %    (or indeed weighted at all)
 
+% Parse variable arguments
+randomize = true;
+for i = 1:length(varargin)
+    if isstr(varargin{i})
+        switch lower(varargin{i})
+        case {'randomize'}
+            randomize = varargin{i+1};
+        end
+    end
+end 
+
 % number of states
 K = length(u.pi);
 % number of time points
@@ -77,11 +96,38 @@ T = counts;
 % signal dimension (1 for FRET or 2 for Donor/Acceptor inference)
 D = size(u.W, 2);
 
-% add draw pi ~ Dir(u.pi) to prior with count 1
-w0.pi = u.pi + dirrnd(u.pi', 1)';
+if randomize
+	% draw pi ~ Dir(u.pi) 
+	theta.pi = dirrnd(u.pi', 1)';
+	% draw A ~ Dir(u.A) 
+	theta.A = dirrnd(u.A);
+	% draw state means and emission precision matrices
+	%
+	%   mu ~ N(u.mu, Inv(u.beta * Lambda))
+	%   Lambda ~ Wish(u.W, u.nu) for each k
+	mu = zeros(K, D);
+	Lambda = zeros(K, D, D);
+	for k = 1:K
+	    % draw precision matrix from wishart
+	    Lambda(k, :, :) = wishrnd(u.W(k, :, :), u.nu(k));
+	    % draw mu from multivariate normal
+	    mu(k, :) = mvnrnd(u.mu(k, :), inv(u.beta(k) * Lambda(k, :, :)));
+	end
+	theta.mu = mu;
+	theta.L = Lambda;
+else
+	% set parameters to expectation under prior
+	theta.pi = normalize(u.pi);
+	theta.A = normalize(u.A, 2);
+	theta.mu = u.mu;
+	theta.L = u.W .* u.nu; 
+end
+
+% add pi to prior with count 1
+w0.pi = u.pi + theta.pi;
 
 % add draw A ~ Dir(u.A) to prior with count (T-1)/K for each row  
-w0.A = u.A + dirrnd(u.A) .* (T-1) ./ K;
+w0.A = u.A + theta.A .* (T-1) ./ K;
 
 % TODO: why did JonBron add 0.1 to every element here?
 % w0.ua(k, :) = u.ua(k, :) + dirrnd(u.ua(k, :) + 0.1, 1) .* (T-1) ./ K;
@@ -90,20 +136,11 @@ w0.A = u.A + dirrnd(u.A) .* (T-1) ./ K;
 w0.beta = u.beta + T/K;
 w0.nu = w0.beta + 1;
 
-% draw state means and emission precision matrices
-%
-%   mu ~ N(u.mu, Inv(u.beta * Lambda))
-%   Lambda ~ Wish(u.W, u.nu) for each k
-mu = zeros(K, D);
-Lambda = zeros(K, D, D);
 for k = 1:K
-    % draw precision matrix from wishart
-    Lambda(k, :, :) = wishrnd(u.W(k, :, :), u.nu(k));
-    % draw mu from multivariate normal
-    w_mu_k = mvnrnd(u.mu(k, :), inv(u.beta(k) * Lambda(k, :, :)));
     % w0.mu = (u.beta * u.mu + T/K * mu) / (u.beta + T/K)
-    w0.mu(k, :) = (u.beta(k) * u.mu(k, :) + T/K * w_mu_k) / w0.beta(k);;
+    w0.mu(k, :) = (u.beta(k) * u.mu(k, :) + T/K * theta.mu(k,:)) / w0.beta(k);;
 end
 
-% set W such that W nu = precision 
-w0.W = bsxfun(@times, Lambda, 1 ./ w0.nu);
+% set W such that W nu = L 
+% TODO: this should be a proper update, but ok for now
+w0.W = bsxfun(@times, theta.L, 1 ./ w0.nu);
