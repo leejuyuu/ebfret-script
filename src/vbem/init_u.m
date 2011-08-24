@@ -98,7 +98,7 @@ rng_mu = (max_mu - min_mu);
 
 % check whether minimum separation of states fits into range
 if sep_mu > rng_mu / (K-1)
-    warning(['Minimum separation of states ''sep_mu = %.2f'' is too',
+    warning(['Minimum separation of states ''sep_mu = %.2f'' is too', ...
              'large for specified range. Setting ''sep_mu = %.2f''.'], ... 
              sep_mu, rng_mu / (K-1));
     sep_mu = rng_mu / (K-1);
