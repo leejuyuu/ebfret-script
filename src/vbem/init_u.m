@@ -1,4 +1,4 @@
-function u = init_u(K, counts, varargin)
+function u = init_u(K, varargin)
 % u = init_u(K, counts, varargin)
 %
 % Initializes a set of hyperparameters u used to define the prior 
@@ -11,22 +11,36 @@ function u = init_u(K, counts, varargin)
 %   K : int
 %       Number of states.
 %
-%	counts : int
-%		Strength of prior, specified in number of pseudocounts,
-%		e.g. the number of virtual obeservations that have informed
-%		the prior. 
 %
 % Variable Inputs
 % ---------------
 %
-% 'sep' : float (default 0.02)
+% 'mu_counts' : int 
+%   Strength of prior, specified in number of pseudocounts,
+%   e.g. the number of virtual obeservations that have informed
+%   the prior. If specified, beta = mu_counts / K * ones(K, 1), 
+%   otherwise beta = 1.
+%
+% 'mu_sep' : float (default 0.02)
 %   Minimum separation of states.
 %
-% 'min' : float (default 0)
+% 'mu_min' : float (default 0)
 %   Minimum level for states.
 %
-% 'max' : float (default 1)
+% 'mu_max' : float (default 1)
 %   Maximum level for states.
+%
+% 'A_counts' : int (default 0)
+%   Number of pseudocounts to assign to transition matrix prior,
+%   e.g. the number of virtual transitions that have been previously
+%   observed. Note that u.A = 1 is equivalent to an ininformative
+%   prior, so these counts are added to a matrix ones(K, K)
+%
+% 'A_tau' : float
+%   If unset, additional counts are assigned uniformly to prior. 
+%   If specified, diagonal elements are set to ensure that the 
+%   expected life-time of each state is equal to A_tau. 
+%
 %
 % Outputs
 % -------
@@ -59,18 +73,27 @@ function u = init_u(K, counts, varargin)
 %   (have no idea how to set priors for mu for this case)
 
 % Parse variable arguments
-sep_mu = 0.02;
-min_mu = 0;
-max_mu = 1;
+mu_counts = K;
+mu_sep = 0.02;
+mu_min = 0;
+mu_max = 1;
+A_counts = 0;
+A_tau = 0;
 for i = 1:length(varargin)
     if isstr(varargin{i})
         switch lower(varargin{i})
-        case {'sep'}
-            sep_mu = varargin{i+1};
-        case {'min'}
-            min_mu = varargin{i+1};
-        case {'max'}
-            max_mu = varargin{i+1};
+        case {'mu_counts'}
+            mu_counts = varargin{i+1};
+        case {'mu_sep'}
+            mu_sep = varargin{i+1};
+        case {'mu_min'}
+            mu_min = varargin{i+1};
+        case {'mu_max'}
+            mu_max = varargin{i+1};
+        case {'a_counts'}
+            A_counts = varargin{i+1};
+        case {'a_tau'}
+            A_tau = varargin{i+1};
         end
     end
 end 
@@ -79,46 +102,54 @@ end
 %
 %   p(z(1) = k | u.pi)  =  pi(k)
 %
-% make this uniform with one count
-u.pi = ones(K, 1) ./ K;
+% make this uniform with one count in each state
+u.pi = ones(K, 1);
 
 % Prior for transition probabilities 
 %
 %   p(z(t)=l | z(t-1)=k)  =  A(k, l)
-%
-% uniform distribtuion of counts
-u.A = counts * ones(K, K) / K^2;
+if A_tau
+    % exp(-1 ./ A_tau) on diagonal, constant elsewhere
+    A = exp(-1 ./ A_tau) * eye(K) ...
+        + (1 - exp(-1 ./ A_tau)) * (~eye(K)) / (K - 1);
+else
+    % constant
+    A = ones(K, K);
+end
+% ensure u.A contains A_counts total counts
+u.A = A_counts * A  + ones(K, K);
+
 
 % Prior for emission model parameters
 %
 % p(x(t) | z(t)=k) = Norm(x(t) | mu(k), Lambda(k))
 
 % range of mu values
-rng_mu = (max_mu - min_mu);
+rng_mu = (mu_max - mu_min);
 
 % check whether minimum separation of states fits into range
-if sep_mu > rng_mu / (K-1)
-    warning(['Minimum separation of states ''sep_mu = %.2f'' is too', ...
-             'large for specified range. Setting ''sep_mu = %.2f''.'], ... 
-             sep_mu, rng_mu / (K-1));
-    sep_mu = rng_mu / (K-1);
+if mu_sep > rng_mu / (K-1)
+    warning(['Minimum separation of states ''mu_sep = %.2f'' is too', ...
+             'large for specified range. Setting ''mu_sep = %.2f''.'], ... 
+             mu_sep, rng_mu / (K-1));
+    mu_sep = rng_mu / (K-1);
 end
 
-if sep_mu > 0
+if mu_sep > 0
     % draw K+1 intervals from dirichlet, such that intervals
     % add up to specified range, discounted for minimum sep 
-    int_mu = (rng_mu - (K - 1) * sep_mu) * dirrnd(ones(1, K + 1));
-    mu = cumsum(int_mu(1:K))' + sep_mu * (0:(K-1))';
+    int_mu = (rng_mu - (K - 1) * mu_sep) * dirrnd(ones(1, K + 1));
+    mu = cumsum(int_mu(1:K))' + mu_sep * (0:(K-1))';
 else
     % take evenly spaced fret levels over range
-    mu = min_mu + sep_mu * (0:(K-1))';
+    mu = mu_min + mu_sep * (0:(K-1))';
 end 
 
 % set mu  
 u.mu = mu;
 
 % beta: uniform distribution of counts
-u.beta = counts * ones(K, 1) / K;
+u.beta = mu_counts * ones(K, 1) / K;
 
 % W: set uniformly to 400 / nu. This implies implies an expectation value for 
 % the emission noise of 0.05
