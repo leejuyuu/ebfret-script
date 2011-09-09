@@ -57,7 +57,7 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 
  	% set up for first iteration
 	threshold = 1e-6;
-	maxiter = 100;
+	maxiter = 500;
 	L = [-inf];
 	it = 1;
 	p_new = pi0(:);
@@ -66,6 +66,10 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 
 	% iterate EM steps until log likelihood L converges
 	while (it == 1) | (((L(it) - L(it-1)) > threshold * abs(L(it))) & (it < maxiter))
+		% if it > 1
+        %    fprintf('%.1e, %.1e\n', (L(it) - L(it-1)) / abs(L(it)), sum(u_new(:)))
+        % end
+        
 		% E-step: calculate responsibilities
 
 		% calculate p(w(n,:) | u(k,:), z=k)
@@ -154,6 +158,9 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 		% 	u_g = u;
 		% end
 
+		% sum Xi over d coordinate 
+		Xi0 = sum(Xi, 3);
+
 		% set optimization settings
 		EPS = 10 .* eps;
 		opts = optimset('display', 'off', ...
@@ -164,14 +171,26 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 		% solve u for each mixture component
 		for k = 1:K
 			for e = 1:E
-				root_fun_ke = @(u) root_fun(u, squeeze(Xi(:,e,:)), g0(:,k));
-				u_new(k, e, :) = lsqnonlin(root_fun_ke, ... 
-				                           squeeze(u(k,e,:))' + EPS, ...
-				                           zeros([1 D]), ...
-				                           Inf * ones([1 D]), ...
-				                           opts);
-				% u_new(k, e, :) = fsolve(root_fun_ke, uke' + EPS, opts);
+				% solve for each d separately until convergence
+				u_ke = eps * ones(size(u_new(k,e,:)));
+				while kl_dir(u_new(k,e,:), u_ke) > 1e-2
+					u_ke = u_new(k,e,:);
+					for d = 1:D
+						% sum u over all indices except d
+						u_ke0 = sum(squeeze(u_new(k,e,:)) .* (d ~= 1:D)');;
+						% set root functions for this iteration
+						root_fun_ked = ...
+						    @(u) root_fun(u, u_ke0, ...
+						                  Xi(:,e,d), Xi0(:,e), ...
+						                  g0(:,k));
+						% solve for component d						                             
+						u_new(k, e, d) = ...
+						    lsqnonlin(root_fun_ked, ... 
+						    	      u_new(k,e,d), 0, Inf, opts);
+					end
+				end
 			end
+			squeeze(u_new(k,:,:));
 		end
 
 		% update for p
@@ -196,35 +215,62 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 		end
 	end
 
-
-function err = root_fun(u, Xi, g0)
+function err = root_fun(u_ked, u_ke0, Xi_ed, Xi_e0, g0_k)
 	% Root function for u update in M-step
 	%
 	% Inputs
     % ------
     %	
-    %	u : 1 x D
-    %	Xi : N x D
-    % 	g0 : N x 1
+    %   u_ked : 1 x 1
+    %	u_ke0 : 1 x 1 
+    %	Xi_ed : N x 1 
+    %	Xi_0 : N x 1
+    % 	g0_k : N x 1
     %
     % Outputs
     % -------
     % 
-    %	err : 1 x D
+    %	err : 1 x 1
 
-	% calculate posterior
-	w = bsxfun(@plus, Xi, u);
 	% calculate expectation of theta under posterior params
-	Ew_log_theta = bsxfun(@minus, psi(w), psi(sum(w, 2)));
+	Ew_log_theta = psi(Xi_ed + u_ked) - psi(Xi_e0 + u_ke0 + u_ked);
 	% average over samples, weighted by responsibilities
 	% to obtain estimate of log(theta) for cluster
-	Ew_log_theta = sum(bsxfun(@times, g0, Ew_log_theta), 1);
+	Ew_log_theta = sum(g0_k .* Ew_log_theta, 1);
 	% calculate expectation of theta under posterior params
-	Eu_log_theta = bsxfun(@minus, psi(u), psi(sum(u, 2)));
-	% weight solver error by exp(E_log_theta) mitigate
-	% divergence of psi(theta) for theta -> 0.
-	err = (Eu_log_theta - Ew_log_theta) ... 
-	      .* (exp(Ew_log_theta) + eps);
+	Eu_log_theta = psi(u_ked) - psi(u_ke0 + u_ked);
+	% calculate solver error
+	err = (Eu_log_theta - Ew_log_theta);
+
+
+% function err = root_fun(u, Xi, g0)
+% 	% Root function for u update in M-step
+% 	%
+% 	% Inputs
+%     % ------
+%     %	
+%     %	u : 1 x D
+%     %	Xi : N x D
+%     % 	g0 : N x 1
+%     %
+%     % Outputs
+%     % -------
+%     % 
+%     %	err : 1 x D
+
+% 	% calculate posterior
+% 	w = bsxfun(@plus, Xi, u);
+% 	% calculate expectation of theta under posterior params
+% 	Ew_log_theta = bsxfun(@minus, psi(w), psi(sum(w, 2)));
+% 	% average over samples, weighted by responsibilities
+% 	% to obtain estimate of log(theta) for cluster
+% 	Ew_log_theta = sum(bsxfun(@times, g0, Ew_log_theta), 1);
+% 	% calculate expectation of theta under posterior params
+% 	Eu_log_theta = bsxfun(@minus, psi(u), psi(sum(u, 2)));
+% 	% weight solver error by exp(E_log_theta) mitigate
+% 	% divergence of psi(theta) for theta -> 0.
+% 	err = (Eu_log_theta - Ew_log_theta) ... 
+% 	      .* (exp(Ew_log_theta) + eps);
 
 
 % % equations for solver (see above)
