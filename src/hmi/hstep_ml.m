@@ -206,26 +206,30 @@ u.pi = lsqnonlin(root_fun, ...
 E_log_wA = arrayfun(@(w) w.wt * bsxfun(@plus, psi(w.A + EPS), -psi(sum(w.A + EPS, 2))), ...
                     w, 'UniformOutput', false);
 E_log_wA = mean(cat(3, E_log_wA{:}), 3);
+
+% calculate weights
 w_A = exp(E_log_wA);
+% w_A = arrayfun(@(w) w.A, w, 'UniformOutput', false); 
+% w_A = mean(cat(3, w_A{:}), 3);
 
 %A(k,:): solve system of equations
-u.A = zeros(size(u_old.A));
+u.A = u_old.A;
 for k = 1:K
-    % root_fun = @(a0) wA(k,:) - exp(psi(a0 * wA(k,:)) - psi(a0 * sum(wA(k,:))));
-    % a0_guess = sum(u_old.A(k,:), 2);
-    % a0 = lsqnonlin(root_fun, ...
-    %               a0_guess, ...
-    %               eps * ones(size(a0_guess)), ...
-    %               Inf * ones(size(a0_guess)), ...
-    %               opts);
-    % u.A(k,:) = a0 * wA(k,:);
-    %root_fun = @(u_Ak) E_log_wA(k,:) - (psi(u_Ak) - psi(sum(u_Ak)));
-    root_fun = @(u_Ak) (E_log_wA(k,:) - (psi(u_Ak) - psi(sum(u_Ak)))) .* (w_A(k,:) + eps);
-    u.A(k,:) = lsqnonlin(root_fun, ...
-                         u_old.A(k,:), ...
-                         zeros(size(u_old.A(k,:))), ...
-                         Inf * ones(size(u_old.A(k,:))), ...
-                         opts);
+    %get amplitude in right ballpark first
+    root_fun = @(U) (E_log_wA(k,:) - (psi(U * u.A(k,:)) - psi(sum(U * u.A(k,:))))) .* (w_A(k,:) + eps);
+    U = lsqnonlin(root_fun, 1, 0, Inf, opts);
+    u.A(k,:) = U * u.A(k,:);
+
+    % now do all components
+    uAk_old = eps * ones(size(u.A(k,:)));
+    while kl_dir(u.A(k,:), uAk_old) > 1e-4
+        uAk_old = u.A(k,:);
+        for l = 1:K
+            uA0 = sum(u.A(k,:) .* (l ~= 1:K));
+            root_fun = @(uAkl) (E_log_wA(k,l) - (psi(uAkl) - psi(uAkl + uA0))); 
+            u.A(k,l) = lsqnonlin(root_fun, u.A(k,l), 0, Inf, opts);
+        end
+    end
 end
 
 u_new = u;
