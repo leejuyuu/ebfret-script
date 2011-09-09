@@ -165,8 +165,8 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 		EPS = 10 .* eps;
 		opts = optimset('display', 'off', ...
 		                'tolX', 1e-9, ...
-		                'tolFun', eps, ...
-		                'algorithm', 'trust-region-reflective');
+		                'tolFun', eps);
+		                %'algorithm', 'trust-region-reflective');
 
 		% solve u for each mixture component
 		for k = 1:K
