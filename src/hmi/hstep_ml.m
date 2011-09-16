@@ -102,6 +102,10 @@ function u_new = hstep_ml(w, u)
 %
 %   psi(Sum u.pi) - psi(u.pi) = -E[log pi] 
 
+
+% TODO: make this a variable arg
+threshold = 1e-6;
+
 % Get dimensions
 N = length(w);
 K = length(w(1).pi);
@@ -110,7 +114,7 @@ K = length(w(1).pi);
 EPS = 10 * eps;
 
 % set optimization settings
-opts = optimset('display', 'off', 'tolX', 1e-9, 'tolFun', eps);
+opts = optimset('display', 'off', 'tolX', threshold, 'tolFun', eps);
 
 % % get weights for updates
 % if WeighTraces
@@ -193,13 +197,30 @@ E_log_wpi = mean([E_log_wpi{:}], 2);
 w_pi = exp(E_log_wpi);
 
 %(pi): solve system of equations
-%root_fun = @(u_pi) E_log_wpi - (psi(u_pi) - psi(sum(u_pi)));
-root_fun = @(u_pi) (E_log_wpi - (psi(u_pi) - psi(sum(u_pi)))) .* (w_pi + eps);
-u.pi = lsqnonlin(root_fun, ...
-                 u_old.pi, ...
-                 zeros(size(u_old.pi)) + 1e-6, ...
-                 Inf + zeros(size(u_old.pi)), ...
-                 opts);
+
+% %root_fun = @(u_pi) E_log_wpi - (psi(u_pi) - psi(sum(u_pi)));
+% root_fun = @(u_pi) (E_log_wpi - (psi(u_pi) - psi(sum(u_pi)))) .* (w_pi + eps);
+% u.pi = lsqnonlin(root_fun, ...
+%                  u_old.pi, ...
+%                  zeros(size(u_old.pi)) + 1e-6, ...
+%                  Inf + zeros(size(u_old.pi)), ...
+%                  opts);
+
+%get amplitude in right ballpark first
+root_fun = @(P) (E_log_wpi - (psi(P * u.pi) - psi(sum(P * u.pi)))) .* (w_pi + eps);
+P = lsqnonlin(root_fun, 1, 0, Inf, opts);
+u.pi = P * u.pi;
+
+% now run interative updates on individual components
+upi_old = eps * ones(size(u.pi));
+while kl_dir(u.pi, upi_old) > threshold
+    upi_old = u.pi;
+    for l = 1:K
+        upi0 = sum(u.pi .* (l ~= 1:K)');
+        root_fun = @(upik) (E_log_wpi(k) - (psi(upik) - psi(upik + upi0))); 
+        u.pi(k) = lsqnonlin(root_fun, u.pi(k), 0, Inf, opts);
+    end
+end
 
 % A(k,:) ~ Dirichlet
 % E[log A(k,:)]: Same as E[log pi]
@@ -222,7 +243,7 @@ for k = 1:K
 
     % now do all components
     uAk_old = eps * ones(size(u.A(k,:)));
-    while kl_dir(u.A(k,:), uAk_old) > 1e-4
+    while kl_dir(u.A(k,:), uAk_old) > threshold
         uAk_old = u.A(k,:);
         for l = 1:K
             uA0 = sum(u.A(k,:) .* (l ~= 1:K));
