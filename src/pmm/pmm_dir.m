@@ -34,6 +34,7 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 	%			1  : Converged
 	%			0  : Hit maximum number of iterations
 	%		    -1 : Likelihood decreased on last iteration
+	%		    -2 : Failed on first iteration
 	%
 	% TODO: write up math and document this properly
 
@@ -85,19 +86,29 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 		pwz_u = bsxfun(@times, pw_uz, p_new');
 
 		% calculate gamma(n, k) = p(zeta(n)=k | w(n, :), u)
-		g = bsxfun(@rdivide, pwz_u, sum(pwz_u, 2)); 
+		g_new = bsxfun(@rdivide, pwz_u, sum(pwz_u, 2)); 
 
 		% Check whether log likelihood increased
 		L_new = sum(log(sum(pwz_u, 2)));
 		if L_new > L(it)
 			L(it+1) = L_new;
 			u = u_new;
+			g = g_new;
 			p = p_new;
 		elseif L(it) - L_new > threshold * abs(L_new)
 			warning('pmm_dir:DecreasedL', 'Log likelihood decreased by %e', L_new-L(it))
+			% set exitflag to likelihood decrease on last iter
 			exitflag = -1;
 			break;
 		else
+			if (it ==1)
+				% set exitflag to first iteration failed
+				exitflag = -2;
+				% make sure output values assigned (so we can fail gracefully)
+				u = u_new;
+				g = g_new;
+				p = p_new;
+			end
 			break;
 		end
 
