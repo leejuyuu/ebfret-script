@@ -215,8 +215,8 @@ u.pi = P * u.pi;
 upi_old = eps * ones(size(u.pi));
 while kl_dir(u.pi, upi_old) > threshold
     upi_old = u.pi;
-    for l = 1:K
-        upi0 = sum(u.pi .* (l ~= 1:K)');
+    for k = 1:K
+        upi0 = sum(u.pi .* (k ~= 1:K)');
         root_fun = @(upik) (E_log_wpi(k) - (psi(upik) - psi(upik + upi0))); 
         u.pi(k) = lsqnonlin(root_fun, u.pi(k), 0, Inf, opts);
     end
