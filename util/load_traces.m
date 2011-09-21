@@ -1,4 +1,4 @@
-function [FRET raw labels orig] = load_traces(data_files, varargin)
+function [FRET raw labels orig idxs] = load_traces(data_files, varargin)
 % Loads traces from a number of data files into a single dataset.
 %
 % Data must be formatted as a matrix with T rows (time points) and
@@ -30,7 +30,11 @@ function [FRET raw labels orig] = load_traces(data_files, varargin)
 %
 % 'MinLength' (integer, default:0)
 %   Minimum length of traces 
-%  
+%
+% 'MaxOutliers' (integer, default:inf)
+%	Reject trace if it contains more than a certain number of points
+%   which are <= 0 or >= 1.0
+%
 % 'BlackList' (array of indices, default:[])
 %   Array of trace indices to throw out (e.g. because they contain a
 %   photoblinking event or other anomaly)   
@@ -55,7 +59,9 @@ function [FRET raw labels orig] = load_traces(data_files, varargin)
 % orig (1xN cell)
 %   Raw 2D signals without removal of photobleaching
 %   or blacklisted/short traces
-%   (empty if no photobleaching removal has taken place)
+%
+% idxs (1xN int)
+%	Indices of accepted traces
 %
 % Jan-Willem van de Meent
 % $Revision: 1.00 $  $Date: 2011/05/04$
@@ -65,6 +71,7 @@ function [FRET raw labels orig] = load_traces(data_files, varargin)
 HasLabels = true;
 RemoveBleaching = false;
 MinLength = 0;
+MaxOutliers = inf;
 BlackList = [];
 ShowProgress = false;
 for i = 1:length(varargin)
@@ -76,6 +83,8 @@ for i = 1:length(varargin)
             RemoveBleaching = varargin{i+1};
         case {'minlength'}
             MinLength = varargin{i+1};
+        case {'maxoutliers'}
+            MaxOutliers = varargin{i+1};
         case {'blacklist'}
             BlackList = varargin{i+1};
         case {'showprogress'}
@@ -112,9 +121,11 @@ for d = 1:length(data_files)
     mask = ones(length(origd),1);
     mask(BlackList) = 0;
 
+	
     % construct FRET signal and remove photobleaching
     FRETd = cell(1, length(origd));
     rawd = cell(1, length(origd));
+	idxs = [];
     for n = 1:length(origd)
         if mask(n)
             if ShowProgress
@@ -126,7 +137,9 @@ for d = 1:length(data_files)
             don = origd{n}(:, 1);
             acc = origd{n}(:, 2);
             fret = acc ./ (don + acc);
-            fret(fret<0) = 0;
+   
+   			% clip outlier points 
+            fret(fret<-0.2) = -0.2;
             fret(fret>1.2) = 1.2;
 
             if RemoveBleaching
@@ -140,10 +153,18 @@ for d = 1:length(data_files)
             
             % sanity check: donor bleaching should result in acceptor bleaching
             % but we'll allow a few time points tolerance
-            if (ia < (id + 5)) & (min(id,ia) >= MinLength)
-                % keep stripped signal
-                FRETd{n} = fret(1:min(id,ia));
-                rawd{n} = [don(1:min(id,ia)) acc(1:min(id,ia))];
+			tol = 5;
+            if (ia < (id + tol)) & (min(id,ia) >= MinLength)
+				rng = 1:min(id,ia);
+				outliers = sum((fret(rng)<=0) | (fret(rng)>=1.0));
+				if (outliers <= MaxOutliers)
+                	% keep stripped signal
+                	FRETd{n} = fret(1:min(id,ia));
+                	rawd{n} = [don(1:min(id,ia)) acc(1:min(id,ia))];
+					idxs(end+1) = n;
+			    elseif ShowProgress
+                	disp(sprintf('   rejecting trace (too many outlier points): %d', n));
+				end
             end
         else
             if ShowProgress
