@@ -1,4 +1,4 @@
-function [FRET raw orig] = load_traces(data_files, varargin)
+function [FRET raw labels orig] = load_traces(data_files, varargin)
 % Loads traces from a number of data files into a single dataset.
 %
 % Data must be formatted as a matrix with T rows (time points) and
@@ -22,17 +22,20 @@ function [FRET raw orig] = load_traces(data_files, varargin)
 % Variable Inputs
 % ---------------
 %
-% 'RemoveBleaching' (boolean)
+% 'HasLabels' (boolean, default:true)
+%   Assume first row contains trace labels
+%
+% 'RemoveBleaching' (boolean, default:true)
 %   Remove photobleaching from traces
 %
-% 'MinLength' (integer)
+% 'MinLength' (integer, default:0)
 %   Minimum length of traces 
 %  
-% 'BlackList' (array of indices)
+% 'BlackList' (array of indices, default:[])
 %   Array of trace indices to throw out (e.g. because they contain a
 %   photoblinking event or other anomaly)   
 %
-% 'ShowProgress' (boolean)
+% 'ShowProgress' (boolean, default:false)
 %   Display messages to indicate loading progress 
 %   (for large datasets where photobleaching removal takes long time)
 %
@@ -42,8 +45,13 @@ function [FRET raw orig] = load_traces(data_files, varargin)
 %
 % FRET (1xN cell)
 %   FRET signals (Tx1 == acceptor / (donor + acceptor)) 
+%
 % raw (1xN cell)
 %   Raw 2D donor/acceptor signals (Tx2)
+%
+% labels (1xN int)
+%   Index of each trace
+%
 % orig (1xN cell)
 %   Raw 2D signals without removal of photobleaching
 %   or blacklisted/short traces
@@ -54,6 +62,7 @@ function [FRET raw orig] = load_traces(data_files, varargin)
 
 
 % parse variable arguments
+HasLabels = true;
 RemoveBleaching = false;
 MinLength = 0;
 BlackList = [];
@@ -61,6 +70,8 @@ ShowProgress = false;
 for i = 1:length(varargin)
     if isstr(varargin{i})
         switch lower(varargin{i})
+        case {'haslabels'}
+            HasLabels = varargin{i+1};
         case {'removebleaching'}
             RemoveBleaching = varargin{i+1};
         case {'minlength'}
@@ -81,13 +92,25 @@ for d = 1:length(data_files)
     if ShowProgress
         disp(sprintf('Loading Dataset: %s', data_files{d}));
     end
+
+    % load dataset
     dat = load(data_files{d});
+    
+    % strip labels if necessary
+    if HasLabels
+        labelsd = num2cell(dat(1, 1:2:end));
+        dat = dat(2:end, :);
+    end
+
+    % strip first point (usually bad data)
+    dat = dat(2:end, :);
+
+    % convert to cell array
     origd = mat2cell(dat, size(dat,1), 2 * ones(size(dat,2) / 2, 1));
 
     % mask out bad traces
     mask = ones(length(origd),1);
     mask(BlackList) = 0;
-
 
     % construct FRET signal and remove photobleaching
     FRETd = cell(1, length(origd));
@@ -100,8 +123,8 @@ for d = 1:length(data_files)
 
             % every 1st column is assumed to contain donor signal,
             % whereas every 2nd column is assumed to contain acceptor
-            don = origd{n}(2:end, 1);
-            acc = origd{n}(2:end, 2);
+            don = origd{n}(:, 1);
+            acc = origd{n}(:, 2);
             fret = acc ./ (don + acc);
             fret(fret<0) = 0;
             fret(fret>1.2) = 1.2;
@@ -131,6 +154,7 @@ for d = 1:length(data_files)
 
     FRET = {FRET{:} FRETd{~cellfun(@isempty, FRETd)}};
     raw = {raw{:},  rawd{~cellfun(@isempty, rawd)}};
-    orig = {orig{:}, origd};
+    orig = {orig{:}, origd{:}};
+    labels = {labels{:}, labelsd{:}};
     clear dat;
 end
