@@ -158,9 +158,13 @@ while ~converged
         R = restarts;
         for n = 1:N
             % do not randomize first restart
-            w0(n, 1) =  init_w(u0, length(data{n}), 'randomize', false);
+			if (it == 1)
+            	w0(n, 1) =  init_w(u0, length(data{n}), 'randomize', false);
+			else
+        		w0(n, 1) = w(it-1, n);
+			end
+       		% randomize guess w0 for other restarts
             for r = 2:R
-                % randomize guess w0 for other restarts
                 w0(n, r) = init_w(u0, length(data{n}));
             end
         end
