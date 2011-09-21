@@ -43,7 +43,7 @@ sb = sqrt((triu(ones(T)) * signal.^2) ./ (T:-1:1)' - mb.^2);
 
 % create gaussian for time smoothing
 if nargin < 2
-    sigma = 3;
+    sigma = 5;
 end
 
 W = round(3 * sigma);
