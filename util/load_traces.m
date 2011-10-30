@@ -33,7 +33,7 @@ function [FRET raw labels orig idxs] = load_traces(data_files, varargin)
 %
 % 'MaxOutliers' (integer, default:inf)
 %	Reject trace if it contains more than a certain number of points
-%   which are <= 0 or >= 1.0
+%   which are <= -0.2 or >= 1.2
 %
 % 'BlackList' (array of indices, default:[])
 %   Array of trace indices to throw out (e.g. because they contain a
@@ -66,6 +66,9 @@ function [FRET raw labels orig idxs] = load_traces(data_files, varargin)
 % Jan-Willem van de Meent
 % $Revision: 1.00 $  $Date: 2011/05/04$
 
+% these should probably be changeable
+FRET_MIN = -0.2;
+FRET_MAX = 1.2;
 
 % parse variable arguments
 HasLabels = true;
@@ -139,8 +142,8 @@ for d = 1:length(data_files)
             fret = acc ./ (don + acc);
    
    			% clip outlier points 
-            fret(fret<-0.2) = -0.2;
-            fret(fret>1.2) = 1.2;
+            fret(fret<-0.2) = FRET_MIN;
+            fret(fret>1.2) = FRET_MAX;
 
             if RemoveBleaching
                 % find photobleaching point in donor and acceptor
@@ -156,7 +159,7 @@ for d = 1:length(data_files)
 			tol = 5;
             if (ia < (id + tol)) & (min(id,ia) >= MinLength)
 				rng = 1:min(id,ia);
-				outliers = sum((fret(rng)<=0) | (fret(rng)>=1.0));
+				outliers = sum((fret(rng)<=FRET_MIN) | (fret(rng)>=FRET_MAX));
 				if (outliers <= MaxOutliers)
                 	% keep stripped signal
                 	FRETd{n} = fret(1:min(id,ia));
