@@ -12,13 +12,16 @@ function varargout = tracePlotter(FRET, varargin)
 % ---------------
 %
 %   'raw' (1xN cell)
-%		Donor/Acceptor signals
+%       Donor/Acceptor signals
 %
 %   'vb' (1xN struct, optional)
 %       VBEM output for each trace
 %
 %   'vit' (1xN struct, optional)
 %       Viterbi paths
+%
+%   'labels' (1xN cell)
+%       Trace Labels       
 %
 %   Any other variable arguments are passed to tracePlotterGUI.
 %
@@ -31,50 +34,61 @@ function varargout = tracePlotter(FRET, varargin)
 
 N = length(FRET)
 for n = 1:N
-	data(n).FRET = FRET{n};
+    data(n).FRET = FRET{n};
 end
 
 % loop over variable arguments
 i=1;
 while i <= length(varargin)
-	matched = false;
+    matched = false;
     if isstr(varargin{i})
         switch lower(varargin{i})
         case {'raw'}
-        	matched = true;
-        	raw = varargin{i+1};
-        	for n = 1:length(raw)
-				data(n).don = raw{n}(:,1);
-				data(n).acc = raw{n}(:,2);
-			end
+            matched = true;
+            raw = varargin{i+1};
+            for n = 1:length(raw)
+                data(n).don = raw{n}(:,1);
+                data(n).acc = raw{n}(:,2);
+        end
             
         case {'vb'}
-        	matched = true;
-        	vb = varargin{i+1}
-        	% add vb fields to data struct
-			fields = fieldnames(vb);
-			for f = 1:length(fields)
-				[data.(fields{f})] = vb.(fields{f})
-			end
+            matched = true;
+            vb = varargin{i+1}
+            % add vb fields to data struct
+            fields = fieldnames(vb);
+            for f = 1:length(fields)
+                [data.(fields{f})] = vb.(fields{f})
+            end
             
         case {'vit'}
-        	matched = true;
-        	vit = varargin{i+1}
-        	% add vit fields to data struct
-			fields = fieldnames(vit);
-			for f = 1:length(fields)
-				[data.(fields{f})] = vit.(fields{f})
-			end
-		end
-		        
+            matched = true;
+            vit = varargin{i+1}
+            % add vit fields to data struct
+            fields = fieldnames(vit);
+            for f = 1:length(fields)
+                [data.(fields{f})] = vit.(fields{f})
+            end
+
+        case {'labels'}
+            matched = true;
+            if isnumeric(varargin{i+1})
+                labels = num2cell(varargin{i+1}, 1);
+            else
+                labels = varargin{i+1};
+            end
+            for n = 1:length(labels)
+                data(n).label = labels{n}
+            end
+        end
+                
         if matched
-        	% strip arguments from varargin 
-        	% (so they are not passed to tracePlotterGUI)
-        	I = length(varargin);
-        	msk = ((1:I)~=i) & ((1:I)~=(i+1));
-        	varargin = {varargin{find(msk)}};
+            % strip arguments from varargin 
+            % (so they are not passed to tracePlotterGUI)
+            I = length(varargin);
+            msk = ((1:I)~=i) & ((1:I)~=(i+1));
+            varargin = {varargin{find(msk)}};
         else
-        	i = i+1;
+            i = i+1;
         end
     end
 end

@@ -22,7 +22,7 @@ function varargout = tracePlotterGUI(varargin)
 % Jan-Willem van de Meent
 % $Revision: 1.00 $  $Date: 2011/05/16$
 
-% Last Modified by GUIDE v2.5 19-Sep-2011 23:36:06
+% Last Modified by GUIDE v2.5 30-Oct-2011 13:08:26
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 0;
@@ -46,6 +46,14 @@ end
 
 % --- Executes just before tracePlotter is made visible.
 function tracePlotterGUI_OpeningFcn(hObject, eventdata, handles, varargin)
+    % --- REPLACE THIS WITH A BUTTON, OR SMTH 
+    H_MARGIN = 0.05;
+    V_MARGIN = 0.10;
+    H_SPACING = 0.025;
+    V_SPACING = 0.025;
+    PLOT_HIST = true;
+    HIST_WIDTH = 0.15;
+
     % Choose default command line output for tracePlotter
     handles.output = hObject;
 
@@ -58,25 +66,61 @@ function tracePlotterGUI_OpeningFcn(hObject, eventdata, handles, varargin)
     if ~isfield(handles, 'subPlots')
         data = handles.data;
         handles.subPlots = 1;
-        handles.rawPlot = 0;
-        handles.gamPlot = 0;
-        handles.K = 0;
+
+        % if we have the raw signal, assign a subplot for it
         if isfield(data,'don') & isfield(data,'acc')
             handles.subPlots = handles.subPlots + 1;
             handles.rawPlot = handles.subPlots;
+        else 
+            handles.rawPlot = 0;
         end
+
+        % if we have latent states, then store K so colors
+        % can be assigned
         if isfield(data,'z')
             handles.K = max(cat(1,data.z));
+        else
+            handles.K = 0 
         end
-        if isfield(data,'g') & isfield(data,'xi')
-            handles.K = size(data(1).g, 2);
-            handles.subPlots = handles.subPlots + 1;
-            handles.gamPlot = handles.subPlots;
+
+        % gamma/xi plotting disabled (for now)
+        handles.gamPlot = 0;
+
+        % if isfield(data,'g') & isfield(data,'xi')
+        %     handles.K = size(data(1).g, 2);
+        %     handles.subPlots = handles.subPlots + 1;
+        %     handles.gamPlot = handles.subPlots;
+        % end
+
+        % if we are plotting signal histograms, assign subplots
+        handles.mainHist = 0;
+        handles.rawHist = 0;
+        handles.gamHist = 0;
+        if PLOT_HIST
+            handles.mainHist = handles.subPlots + 1;
+            if handles.rawPlot
+                handles.rawHist = handles.subPlots + handles.rawPlot;
+            end
+            if handles.gamPlot
+                handles.gamHist = handles.subPlots + handles.gamPlot;
+            end
         end
-        if handles.subPlots > 1
-            P = handles.subPlots;
-            for p = 1:P
-                handles.plotAxes(p) = subplot('position', [0.04, 0.9*(P-p)/P+0.1, 0.94, 1/P-0.1]);
+
+        R = handles.subPlots;
+        % subplot height
+        h = (1 - V_MARGIN - (R-1) * V_SPACING) / R;
+        % subplot width
+        w = (1 - H_MARGIN - PLOT_HIST * (H_SPACING + HIST_WIDTH));
+        for r = 1:R
+            handles.plotAxes(r) = ...
+                subplot('position', [0.5 * H_MARGIN, .75 * V_MARGIN + (R-r)*(h + V_SPACING), w, h]);
+        end
+        if PLOT_HIST
+            for r = 1:R
+                handles.plotAxes(r+R) = ...
+                    subplot('position', [0.5 * H_MARGIN + H_SPACING + w, ...
+                                         .75 * V_MARGIN + (R-r)*(h + V_SPACING), ...
+                                         HIST_WIDTH, h]);
             end
         end
     end
@@ -116,8 +160,16 @@ function tracePlotterGUI_PlotChanged(hObject, eventdata, handles)
         sprintf('%d / %d', handles.curPlot, ...
                            handles.maxPlot));
 
+
     % get data
     d = handles.data(handles.curPlot);
+
+    % update label field (if specified)
+    if isfield(d, 'label')
+        set(handles.labelEdit, 'String', d.label);
+    else
+        set(handles.labelEdit, 'Enable', 'off');
+    end
 
     % plot FRET signal
     axes(handles.plotAxes(1));
@@ -169,8 +221,33 @@ function tracePlotterGUI_PlotChanged(hObject, eventdata, handles)
         hold off;
     end
 
+    % plot FRET histogram
+    if handles.mainHist
+        axes(handles.plotAxes(handles.mainHist));
+        cla();
+        bins = linspace(-0.2, 1.2, 51);
+        fret = cat(1,handles.data.FRET);
+        plot(hist(fret,bins), bins, 'k-');
+        ylim([-0.2, 1.2])
 
-    % plot raw signal
+        % plot viterbi histogram (if specified)
+        if isfield(d, 'x') & isfield(d, 'z')
+            x = cat(1,handles.data.x);
+            z = cat(1,handles.data.z);
+            K = handles.K;
+            c = 0.66 .* hsv(K);
+            hold on;
+            for k = 1:K
+                msk = (z == k);
+                fh = hist(fret(msk), bins);
+                xh = hist(x(msk), bins);
+                plot(fh, bins, 'Color', c(k,:))
+                plot(xh * max(fh(:)) / max(xh(:)), bins, '--', 'Color', c(k,:))
+            end
+       end
+    end
+
+    % plot raw signal (if specified)
     if handles.rawPlot
         if length(d.don) > T
             T = length(d.don);
@@ -185,6 +262,19 @@ function tracePlotterGUI_PlotChanged(hObject, eventdata, handles)
         plot(t, d.acc, 'r');
         xlim([0, T]);
         hold off;
+    end
+
+    % plot raw histograms
+    if handles.rawHist
+        axes(handles.plotAxes(handles.rawHist));
+        cla();
+        don = cat(1,handles.data.don);
+        [dh db] = hist(don, 51);
+        plot(dh, db, 'g-');
+        hold on;
+        acc = cat(1,handles.data.acc);
+        [ah ab] = hist(acc, 51);
+        plot(ah, ab, 'r-');
     end
 
     % if length(fieldnames(d)) > 1
@@ -251,8 +341,6 @@ function plotSlider_CreateFcn(hObject, eventdata, handles)
       set(hObject,'BackgroundColor',[.9 .9 .9]);
     end
 
-
-
 function plotEdit_Callback(hObject, eventdata, handles)
     newPlot = round(str2num(get(hObject,'String')));
     if ~isempty(newPlot)
@@ -272,8 +360,17 @@ function plotEdit_CreateFcn(hObject, eventdata, handles)
     if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
       set(hObject,'BackgroundColor','white');
     end
-    % scatter(t, FRET, 8, [0,0,0]);
 
+function labelEdit_Callback(hObject, eventdata, handles)
+    % ignored
+
+% --- Executes during object creation, after setting all properties.
+function labelEdit_CreateFcn(hObject, eventdata, handles)
+    % Hint: edit controls usually have a white background on Windows.
+    %       See ISPC and COMPUTER.
+    if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+        set(hObject,'BackgroundColor','white');
+    end
 
 % --- Executes on button press in prevButton.
 function prevButton_Callback(hObject, eventdata, handles)
@@ -296,3 +393,6 @@ if handles.curPlot < handles.maxPlot
     guidata(hObject, handles);
     tracePlotterGUI_PlotChanged(hObject, eventdata, handles);    
 end
+
+
+
