@@ -45,11 +45,11 @@ function data = synth_data_hFRET_subpop(u, N, T, varargin)
 % 	.theta (struct)
 %		.A (KxK)
 %			Transition matrix
-%		.pi (1xK)
+%		.pi (Kx1)
 %			Initial probability for states
-%		.m (1xK)
+%		.mu (Kx1)
 %			Emission FRET levels of states
-%		.lambda (1xK)
+%		.lambda (Kx1)
 %			Emission precision (1/variance) for states
 %
 %    
@@ -80,9 +80,9 @@ K = length(u.mu);
 for n = 1:N
 	% sample parameters from u
 	theta{n} = struct('A', zeros(K,K), ...
-	                  'pi', zeros(1,K), ...
-	                  'm', zeros(1,K), ...
-	                  'sigma', zeros(1,K));
+	                  'pi', zeros(K,1), ...
+	                  'mu', zeros(K,1), ...
+	                  'sigma', zeros(K,1));
 	% initial probabilities 
 	theta{n}.pi = dirrnd(u.pi');
 	% loop over states
@@ -93,13 +93,13 @@ for n = 1:N
 		% emission model std dev
 		theta{n}.sigma(k) = 1 ./ sqrt(wishrnd(u.W(k), u.nu(k)));
 		% emission model state mean
-		theta{n}.m(k) = u.mu(k) + randn() ...
+		theta{n}.mu(k) = u.mu(k) + randn() ...
 		                .* (theta{n}.sigma(k) ./ sqrt(u.beta(k)));
 	end
 
 	% generate trace states 
-	% (note: z{n}(t) is a K element vector with elements 
-	% delta(i, k) if in state i at time t) 
+	% (note: z{n}(t) has the form of an indicator variable
+	%  i.e. if z(t) in state k, then z(t,l) = delta(k, l))
 	z{n} = zeros(Tn(n), K);
 	% initial state (sample from multinomial)
 	z{n}(1, :) = mnrnd(1, theta{n}.pi);
@@ -111,15 +111,14 @@ for n = 1:N
 		z{n}(t, :) = mnrnd(1, theta{n}.A(find(z{n}(t-1, :)), :));
 	end
 
+	% collapse z from state vector to state index
+	z{n} = sum(bsxfun(@times, z{n}, 1:K),2);
+
 	% generate x levels
-	x{n} = z{n} * theta{n}.m';
+	x{n} = theta{n}.mu(z{n});
 
 	% generate FRET levels
-	FRET{n} = x{n} + ...
-			  (randn(size(z{n})) .* z{n}) * theta{n}.sigma';
-
-	% collapse z from state vector to state index
-	[z{n}, tidx] = find(z{n}');
+	FRET{n} = x{n} + randn(size(z{n})) .* theta{n}.sigma(z{n});
 end
 
 data = struct('FRET', FRET, ...
