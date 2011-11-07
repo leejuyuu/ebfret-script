@@ -1,61 +1,47 @@
 function [z_hat x_hat] = viterbi(w, x)
-
-% function z_hat=chmmViterbi(out,x)
+% function [z_hat x_hat] = viterbi(w, x)
 %
-% function formerly called gmmVbemHmmViterbi
-% 
-% This program runs the Viterbi algorithm on the trace x using paramters
-% from out.
+% Determines Viterbi path on time series x using posterior parameter
+% estimates w.
 %
-% Inputs:
-%     pZ0 (1xK) = normalize(out.Wpi) = p(Z(1) = i)
-%     A (KxK) = transition matrix. A(i,j) = Pr(Z(t+1)=j | Z(t)=i) =
-%       normalize(out.Wa,2)
-%     mus (DxK) = out.m = guessed gaussian means
-%     W (DxDxK) = out.W = Wishart parameter
-%     v (Kx1) = out.v = Wishart parameter 
+% Inputs
+% ------
 %
-%     covarMtx for state k =  inv(W(:,:,k)) / (v(k)-D-1) = mode of Wishart
-%     distribution. See: http://en.wikipedia.org/wiki/Wishart_distribution
+%   w : struct
+%       Variational parameters of approximate posterior distribution 
+%       for parameters q(theta | w), for each of N traces 
 %
-% Outputs:
-%     z_hat (1xT) = vector containin most probable hidden state at time 1:T
-%     x_hat (DxT) = vector containing mean of most probable
-%       state at time 1:T
+%       .A (K x K)
+%           Dirichlet prior for each row of transition matrix
+%       .pi (K x 1)
+%           Dirichlet prior for initial state probabilities
+%       .mu (K x D)
+%           Normal-Wishart prior - state means 
+%       .beta (K x 1)
+%           Normal-Wishart prior - state occupation count
+%       .W (K x D x D)
+%           Normal-Wishart prior - state precisions
+%       .nu (K x 1)
+%           Normal-Wishart prior - degrees of freedom
+%           (must be equal to beta+1)
 %
-% Internal variables:
-%    omega(TxK): omega(t,k) = max p(x1,...,xn,z1,...zn) taken over
-%       (z1,...,zn-1)
-%    bestPriorZ (TxK) = bestPriorZ(t,k) = best predecessor state given that
-%       we ended up in state k at time t
+%   x : (TxD)
+%       Observation sequence (i.e. FRET signal)
 %
-% Likelihood of observations (p(y(t) | Z(t)=i) are calculated from x using
-% gauss(mu,variance,X) from netlab. 
-
-
-% Program based on Kevin Murphy's viterbi_path.m, from Bayes Net Toolbox 
-% http://www.mathworks.com/matlabcentral/fileexchange/loadFile.do?objectId=1341&objectType=FILE  
-% and Bishop 13.2.5. Unlike Muprhy's code, but consistient with Bishop, all
-% calculations are performed using log(P) rather than probablities.
-
-% In viterbi_path.m Murphy uses the following variable names, several of
-% which we have renamed. He makes the following comments in his code:
+% Outputs
+% -------
 %
-% Inputs:
-% prior(i) = Pr(Q(1) = i) = our pZ0
-% transmat(i,j) = Pr(Q(t+1)=j | Q(t)=i) = our A
-% obslik(i,t) = Pr(y(t) | Q(t)=i). We just calculate this value as needed
-%   and never store it in a variable.
+%   z_hat : (Tx1)
+%       Index of most likely state at every time point
 %
-% Outputs:
-% path(t) = q(t), where q1 ... qT is the argmax of the above expression. We
-%   call this z_hat.
-% delta(j,t) = prob. of the best sequence of length t-1 and then going to
-%   state j, and O(1:t). We call this omega to be consistent with Bishop
-%   chapter 13.2.5. 
-% psi(j,t) = the best predecessor state, given that we ended up in state j
-%   at t. We call this bestPriorZ 
-
+%   x_hat : (TxD)
+%       Mean emissions level of most likely state at every time point
+%
+%
+% TODO: untested for use with D>1 time series
+%
+% Jan-Willem van de Meent
+% $Revision: 1.00$  $Date: 2011/11/07$
 
 % A lot of paths have 0 probablity. Not a problem for the calculation, but
 % creates a lot of warning messages.
@@ -64,6 +50,11 @@ warning('off','MATLAB:log:logOfZero')
 % get dimensions
 [K D] = size(w.mu);
 T = length(x);
+
+% get MAP estimate for transition matrix
+A = normalize(w.A, 2);
+
+% calculate emission probabilities
 
 % define gaussian distribution
 if D == 1
@@ -83,21 +74,19 @@ for k=1:K
    omega(1, k) = log(pZ0(k)) + log(gauss(x(1, :), w.mu(k, :), w.W(k, :, :) * w.nu(k)));
 end
 
-% get most likely posterior transition matrix
-A = normalize(w.A, 2);
 
 % stores most likely previous state at each timepoint (dependent on the state)
-bestPriorZ = zeros(T, K);
+z_max = zeros(T, K);
 
 % arbitrary value, since there is no predecessor to t=1
-bestPriorZ(1, :) = 0;
+z_max(1, :) = 0;
 
 % forward pass
-% omega(zn)=ln(p(xn|zn))+max{ln(p(zn|zn-1))+omega(zn-)}
+% omega(zt) = ln(p(xt|zt)) + max{ ln(p(zt|zt-1)) + omega(zt-1) }
 % CB 13.68
 for t=2:T
     for k=1:K
-        [omega(t, k) bestPriorZ(t, k)] = max(log(A(:, k)') + omega(t-1, :));
+        [omega(t, k) z_max(t, k)] = max(log(A(:, k)') + omega(t-1, :));
         omega(t, k) = omega(t, k) + log(gauss(x(t,:), w.mu(k,:), w.W(k,:,:) * w.nu(k)));
     end
 end
@@ -106,7 +95,7 @@ end
 z_hat = zeros(T, 1);
 [L z_hat(T)] = max(omega(T,:));
 for t=(T-1):-1:1
-    z_hat(t) = bestPriorZ(t+1, z_hat(t+1));
+    z_hat(t) = z_max(t+1, z_hat(t+1));
 end
 x_hat = w.mu(z_hat, :);
 
