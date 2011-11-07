@@ -1,4 +1,4 @@
-function [E_ln_pi, E_ln_A, E_p_x_z] = e_step(w, x)
+function [E_ln_pi, E_ln_A, E_ln_det_L, E_p_x_z] = e_step(w, x)
     % [E_ln_pi, E_ln_A, E_p_x_z] = e_step(w)
     % 
     % E-step of VBEM algorithm.
