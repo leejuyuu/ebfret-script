@@ -44,8 +44,13 @@ function [w, L, stat] = vbem(x, w0, u, options)
 %           Convergence threshold. Execution halts when the relative
 %           increase in the lower bound evidence drop below threshold 
 %
-%       .maxIter : int (default: 100)
-%           Maximum number of iteration before execution is truncated    
+%       .maxiter : int (default: 100)
+%           Maximum number of iteration before execution is truncated
+%
+%        .ignore : {'none', 'spike', 'intermediate', 'all'}
+%           Ignore states with length 1 on viterbi path that either
+%           collapse back to the previous state ('spike') or move
+%           to a third state ('intermediate').
 %
 % Outputs
 % -------
@@ -167,8 +172,11 @@ end
 if ~isfield(options, 'threshold')    
     options.threshold = 1e-5;
 end
-if ~isfield(options, 'maxIter')    
-    options.maxIter = 100;
+if ~isfield(options, 'maxiter')    
+    options.maxiter = 100;
+end
+if ~isfield(options, 'ignore')    
+    options.ignore = 'none';
 end
 
 % get dimensions
@@ -183,13 +191,13 @@ if Debug
 end
 
 % Main loop of algorithm
-for it = 1:options.maxIter
+for it = 1:options.maxiter
     % fprintf('[debug] vbem iteration: %d\n', it)
 
     % E-STEP: UPDATE Q(Z)
     %
     % q(z) = 1/Z_q(z) E_q(theta)[ ln p(x,z,theta) ]
-    [E_ln_pi, E_ln_A, E_ln_px_z] = e_step(w)
+    [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step(w, x);
 
     % Forward-back algorithm - computes expecation under q(z) of
     %
@@ -215,7 +223,7 @@ for it = 1:options.maxIter
     % D_kl(q(theta) || p(theta)) = D_kl(q(mu, l) || p(mu, l)) 
     %                              + D_kl(q(A) || p(A)) 
     %                              + D_kl(q(pi) || p(pi))
-    L(it) = L_step(w, u, E_ln_det_L, ln_Z)
+    L(it) = L_step(w, u, E_ln_det_L, ln_Z);
 
     if Debug
         iter(it).ln_Z = ln_Z;
@@ -249,9 +257,9 @@ stat = struct();
 stat.gamma = g;
 stat.xi = xi;
 stat.ln_Z = ln_Z;
-stat.G = G;
-stat.xmean = xmean;
-stat.xvar = xvar;
+%stat.G = G;
+%stat.xmean = xmean;
+%stat.xvar = xvar;
 
 % print debugging output
 if Debug
