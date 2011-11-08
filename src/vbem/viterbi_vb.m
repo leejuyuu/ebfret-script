@@ -54,7 +54,7 @@ function [z_hat x_hat] = viterbi_vb(w, x)
 [E_ln_pi, E_ln_A, E_ln_det_L, E_p_x_z] = e_step(w, x);
 
 % calculate viterbi paths
-z_hat = viterbi(E_p_x_z, exp(E_ln_A), exp(E_ln_pi));
+z_hat = viterbi(log(E_p_x_z), E_ln_A, E_ln_pi);
 
 % generate idealized trace
-x_hat = w.mu(z_hat);
+x_hat = w.mu(z_hat, :);
