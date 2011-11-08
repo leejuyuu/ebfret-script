@@ -242,7 +242,18 @@ for it = 1:options.maxiter
     % PARAMETERS W FROM SUFFICIENT STATISTICS OF Q(Z)
     %
     % CB 10.60-10.63 and MJB 3.54 (JKC 25), 3.56 (JKC 21). 
-    w = m_step(u, x, g, xi);
+
+    % check whether points need to be masked out
+    if ~strcmp(options.ignore, 'none')
+        z_hat = viterbi(E_ln_px_z, E_ln_A, E_ln_pi);
+        [g_f, xi_f] = jitter_filter(z_hat, g, xi, options); 
+    end
+
+    if strcmp(options.ignore, 'none')
+        w = m_step(u, x, g, xi);
+    else
+        w = m_step(u, x, g_f, xi_f);
+    end
 
     % check if the lower bound increase is less than threshold
     if (it>2)    
