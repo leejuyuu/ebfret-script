@@ -189,7 +189,7 @@ for it = 1:options.maxIter
     % E-STEP: UPDATE Q(Z)
     %
     % q(z) = 1/Z_q(z) E_q(theta)[ ln p(x,z,theta) ]
-    [E_ln_pi, E_ln_A, E_p_x_z] = e_step(w)
+    [E_ln_pi, E_ln_A, E_ln_px_z] = e_step(w)
 
     % Forward-back algorithm - computes expecation under q(z) of
     %
@@ -206,7 +206,7 @@ for it = 1:options.maxIter
     % NOTE: technically this is part of the M-step, but we will
     % calculate the lower bound L to check for convergence before
     % updating the variational parameters w
-    [g, xi, ln_Z] = forwback(E_p_x_z, exp(E_ln_A), exp(E_ln_pi));  
+    [g, xi, ln_Z] = forwback(exp(E_ln_px_z), exp(E_ln_A), exp(E_ln_pi));  
 
     % COMPUTE LOWER BOUND L
     %

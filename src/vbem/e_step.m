@@ -1,4 +1,4 @@
-function [E_ln_pi, E_ln_A, E_ln_det_L, E_p_x_z] = e_step(w, x)
+function [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step(w, x)
     % [E_ln_pi, E_ln_A, E_p_x_z] = e_step(w)
     % 
     % E-step of VBEM algorithm.
@@ -66,13 +66,13 @@ function [E_ln_pi, E_ln_A, E_ln_det_L, E_p_x_z] = e_step(w, x)
     % E_md(t, k) = D / w.beta(k) + w.nu(k) * dxWdx(t,k)
     E_Delta2 = bsxfun(@plus, (D ./ w.beta)', bsxfun(@times, w.nu', dxWdx));
 
-    % Expectation of p(x | z, theta) under q(theta | w)
+    % Log expectation of p(x | z, theta) under q(theta | w)
     %
-    % E_p_x_z(t, k)
-    %   = (1 / 2 pi)^(D / 2)
-    %     exp[E[ln(|Lambda(k,:,:|)]]^(1/2)
-    %     exp(-0.5 * E[Delta(t,k)^2])
-    E_p_x_z = (2 * pi)^(-D / 2) ...
-              * bsxfun(@times, exp(0.5 * E_ln_det_L'), ...
-                               exp(-0.5 * E_Delta2)) ...
-              + eps;
+    % E_ln_px_z(t, k)
+    %   = log(1 / 2 pi) * (D / 2)
+    %     + 0.5 * E[ln(|Lambda(k,:,:)]]
+    %     - 0.5 * E[Delta(t,k)^2]
+    E_ln_px_z = log(2 * pi) * (-D / 2) ...
+                + bsxfun(@minus, 0.5 * E_ln_det_L', ...
+                                 0.5 * E_Delta2);
+                
