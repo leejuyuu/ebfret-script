@@ -58,8 +58,13 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %   verbose : boolean
 %     Print status information.
 %
-%   maxIter : int (default 100)
+%   maxiter : int (default 100)
 %     Maximum number of iterations 
+%
+%   ignore : {'none', 'spike', 'intermediate', 'all'}
+%      Ignore states with length 1 on viterbi path that either
+%      collapse back to the previous state ('spike') or move
+%      to a third state ('intermediate').
 %
 % Outputs
 % -------
@@ -113,7 +118,8 @@ restarts = 20;
 do_restarts = 'init';
 threshold = 1e-5;
 verbose = false;
-maxIter = 100;
+maxiter = 100;
+ignore = 'none';
 for i = 1:length(varargin)
     if isstr(varargin{i})
         switch lower(varargin{i})
@@ -140,7 +146,9 @@ for i = 1:length(varargin)
         case {'verbose'}
             verbose = varargin{i+1};
         case {'maxiter'}
-            maxIter = varargin{i+1};
+            maxiter = varargin{i+1};
+        case {'ignore'}
+            ignore = varargin{i+1};
         end
     end
 end 
@@ -176,7 +184,8 @@ while ~converged
 
     % run vbem on each trace 
     options.threshold = threshold;
-    options.maxIter = maxIter; 
+    %options.maxiter = maxiter; 
+    options.ignore = ignore; 
     for n = 1:N
         % if verbose
         %     fprintf('hmi init: n = %d\n', n);
@@ -203,7 +212,7 @@ while ~converged
 
     % check for convergence
     if it > 1
-        if (sL(it) - sL(it-1)) < threshold * abs(sL(it-1)) | it > maxIter
+        if (sL(it) - sL(it-1)) < threshold * abs(sL(it-1)) | it > maxiter
             if sL(it) < sL(it-1)
               it = it-1;
             end
@@ -231,7 +240,7 @@ end
 
 % calculate viterbi paths
 for n = 1:N
-    [vit(n).z, vit(n).x] = viterbi(w(it,n), data{n});
+    [vit(n).z, vit(n).x] = viterbi_vb(w(it,n), data{n});
 end 
 
 L = sL(1:it);
