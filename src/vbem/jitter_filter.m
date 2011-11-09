@@ -1,7 +1,7 @@
 function [g_f, xi_f, bad] = jitter_filter(z_hat, g, xi, options)
     [T K] = size(g);
-    bad = find((z_hat(3:end) ~= z_hat(2:end-1)) ...
-               & (z_hat(1:end-2) ~= z_hat(2:end-1))) + 1;
+    bad = find((z_hat(3:end-1) ~= z_hat(2:end-2)) ...
+               & (z_hat(1:end-3) ~= z_hat(2:end-2))) + 1;
     g_f = g;
     xi_f = xi;
     tdxs = [];
