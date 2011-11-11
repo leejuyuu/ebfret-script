@@ -33,7 +33,11 @@ function [FRET raw labels orig idxs] = load_traces(data_files, varargin)
 %
 % 'MaxOutliers' (integer, default:inf)
 %	Reject trace if it contains more than a certain number of points
-%   which are <= -0.2 or >= 1.2
+%   which are outside of ClipRange
+%
+% 'ClipRange' ([min, max], default: [-0.2, 1.2])
+%   Defines lower and upper limits of valid range. Points outside
+%   this range are considered outliers.
 %
 % 'BlackList' (array of indices, default:[])
 %   Array of trace indices to throw out (e.g. because they contain a
@@ -66,10 +70,6 @@ function [FRET raw labels orig idxs] = load_traces(data_files, varargin)
 % Jan-Willem van de Meent
 % $Revision: 1.00 $  $Date: 2011/05/04$
 
-% these should probably be changeable
-FRET_MIN = -0.2;
-FRET_MAX = 1.2;
-
 % parse variable arguments
 HasLabels = true;
 RemoveBleaching = false;
@@ -77,6 +77,7 @@ MinLength = 0;
 MaxOutliers = inf;
 BlackList = [];
 ShowProgress = false;
+ClipRange = [-0.2, 1.2];
 for i = 1:length(varargin)
     if isstr(varargin{i})
         switch lower(varargin{i})
@@ -88,6 +89,8 @@ for i = 1:length(varargin)
             MinLength = varargin{i+1};
         case {'maxoutliers'}
             MaxOutliers = varargin{i+1};
+        case {'cliprange'}
+            ClipRange = sort(varargin{i+1});
         case {'blacklist'}
             BlackList = varargin{i+1};
         case {'showprogress'}
@@ -142,8 +145,8 @@ for d = 1:length(data_files)
             fret = acc ./ (don + acc);
    
    			% clip outlier points 
-            fret(fret<-0.2) = FRET_MIN;
-            fret(fret>1.2) = FRET_MAX;
+            fret(fret<ClipRange(1)) = ClipRange(1);
+            fret(fret>ClipRange(2)) = ClipRange(2);
 
             if RemoveBleaching
                 % find photobleaching point in donor and acceptor
@@ -159,7 +162,7 @@ for d = 1:length(data_files)
 			tol = 5;
             if (ia < (id + tol)) & (min(id,ia) >= MinLength)
 				rng = 1:min(id,ia);
-				outliers = sum((fret(rng)<=FRET_MIN) | (fret(rng)>=FRET_MAX));
+				outliers = sum((fret(rng)<=ClipRange(1)) | (fret(rng)>=ClipRange(2)));
 				if (outliers <= MaxOutliers)
                 	% keep stripped signal
                 	FRETd{n} = fret(1:min(id,ia));
