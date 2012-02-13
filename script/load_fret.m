@@ -1,4 +1,4 @@
-function [FRET raw labels orig idxs] = load_traces(data_files, varargin)
+function [data, raw] = load_fret(data_files, varargin)
 % Loads traces from a number of data files into a single dataset.
 %
 % Data must be formatted as a matrix with T rows (time points) and
@@ -22,28 +22,31 @@ function [FRET raw labels orig idxs] = load_traces(data_files, varargin)
 % Variable Inputs
 % ---------------
 %
-% 'HasLabels' (boolean, default:true)
+% 'has_labels' (boolean, default:false)
 %   Assume first row contains trace labels
 %
-% 'RemoveBleaching' (boolean, default:true)
+% 'remove_bleaching' (boolean, default:false)
 %   Remove photobleaching from traces
 %
-% 'MinLength' (integer, default:0)
+% 'min_length' (integer, default:0)
 %   Minimum length of traces 
 %
-% 'MaxOutliers' (integer, default:inf)
-%	Reject trace if it contains more than a certain number of points
-%   which are outside of ClipRange
-%
-% 'ClipRange' ([min, max], default: [-0.2, 1.2])
+% 'clip_range' ([min, max], default: [-0.2, 1.2])
 %   Defines lower and upper limits of valid range. Points outside
 %   this range are considered outliers.
 %
-% 'BlackList' (array of indices, default:[])
+% 'max_outliers' (integer, default:inf)
+%	Reject trace if it contains more than a certain number of points
+%   which are outside of clip_range
+%
+% 'strip_first' (boolean, default:false)
+%   Discard first time point in each trace
+%
+% 'blacklist' (array of indices, default:[])
 %   Array of trace indices to throw out (e.g. because they contain a
 %   photoblinking event or other anomaly)   
 %
-% 'ShowProgress' (boolean, default:false)
+% 'show_progress' (boolean, default:false)
 %   Display messages to indicate loading progress 
 %   (for large datasets where photobleaching removal takes long time)
 %
@@ -51,60 +54,57 @@ function [FRET raw labels orig idxs] = load_traces(data_files, varargin)
 % Outputs
 % -------
 %
-% FRET (1xN cell)
-%   FRET signals (Tx1 == acceptor / (donor + acceptor)) 
+% data (1xD) struct
+%   .fret (1xN cell)
+%       FRET signals (Tx1 == acceptor / (donor + acceptor)) 
 %
-% raw (1xN cell)
-%   Raw 2D donor/acceptor signals (Tx2)
+%   .donor (1xN cell)
+%       Donor fluorophore signals
 %
-% labels (1xN int)
-%   Index of each trace
+%   .acceptor (1xN cell)
+%       Acceptor fluorophore signals
 %
-% orig (1xN cell)
-%   Raw 2D signals without removal of photobleaching
-%   or blacklisted/short traces
+%   .labels (1xN int)
+%       Index of each trace
 %
-% idxs (1xN int)
-%	Indices of accepted traces
+%   .idxs (1xN int)
+%	  Indices of accepted traces
+%
+% raw (1xD) cell
+%   .donor (1xM cell)
+%       Unprocessed donor fluorophore signals
+%
+%   .acceptor (1xM cell)
+%       Unprocessed acceptor fluorophore signals
+%
 %
 % Jan-Willem van de Meent
-% $Revision: 1.00 $  $Date: 2011/05/04$
+% $Revision: 1.10 $  $Date: 2012/02/10$
 
-% parse variable arguments
-HasLabels = true;
-RemoveBleaching = false;
-MinLength = 0;
-MaxOutliers = inf;
-BlackList = [];
-ShowProgress = false;
-ClipRange = [-0.2, 1.2];
-for i = 1:length(varargin)
-    if isstr(varargin{i})
-        switch lower(varargin{i})
-        case {'haslabels'}
-            HasLabels = varargin{i+1};
-        case {'removebleaching'}
-            RemoveBleaching = varargin{i+1};
-        case {'minlength'}
-            MinLength = varargin{i+1};
-        case {'maxoutliers'}
-            MaxOutliers = varargin{i+1};
-        case {'cliprange'}
-            ClipRange = sort(varargin{i+1});
-        case {'blacklist'}
-            BlackList = varargin{i+1};
-        case {'showprogress'}
-            ShowProgress = varargin{i+1};
-        end
-    end
-end 
+% parse inputs
+ip = InputParser();
+ip.StructExpand = true;
+ip.addRequired('data_files', @(d) iscell(d) | isstr(d));
+ip.addParamValue('has_labels', true, @isscalar);
+ip.addParamValue('remove_bleaching', false, @isscalar);
+ip.addParamValue('min_length', 1, @isscalar);
+ip.addParamValue('clip_range', [-0.2, 1.2], @isnumeric);
+ip.addParamValue('max_outliers', inf, @isscalar);
+ip.addParamValue('strip_first', 0, @isscalar);
+ip.addParamValue('blacklist', [], @isnumeric);
+ip.addParamValue('show_progress', false, @isscalar);
+ip.parse(data_files, varargin{:});
 
-FRET = {};
-raw = {};
-orig = {};
-labels = {};
+% collect inputs
+args = ip.Results;
+if isstr(args.data_files)
+    data_files = {args.data_files};
+else
+    data_files = args.data_files;
+end
+
 for d = 1:length(data_files)
-    if ShowProgress
+    if args.show_progress
         disp(sprintf('Loading Dataset: %s', data_files{d}));
     end
 
@@ -112,76 +112,86 @@ for d = 1:length(data_files)
     dat = load(data_files{d});
     
     % strip labels if necessary
-    if HasLabels
-        labelsd = num2cell(dat(1, 1:2:end));
+    if args.has_labels
+        labels = num2cell(dat(1, 1:2:end));
+        dat = dat(2:end, :);
+    else
+        labels = num2cell(1:length(dat(1, 1:2:end)));
+    end
+
+    % strip first point (often bad data)
+    if args.strip_first
         dat = dat(2:end, :);
     end
 
-    % strip first point (usually bad data)
-    dat = dat(2:end, :);
+    % convert data into cell array
+    raw_data = mat2cell(dat, size(dat,1), 2 * ones(size(dat,2) / 2, 1));
 
-    % convert to cell array
-    origd = mat2cell(dat, size(dat,1), 2 * ones(size(dat,2) / 2, 1));
+    % store raw data in output
+    raw(d).donor = cellfun(@(d) d(:,1), raw_data, 'UniformOutput', false);
+    raw(d).acceptor = cellfun(@(d) d(:,2), raw_data, 'UniformOutput', false);
 
     % mask out bad traces
-    mask = ones(length(origd),1);
-    mask(BlackList) = 0;
+    mask = ones(length(raw_data),1);
+    mask(args.blacklist) = 0;
 
-	
     % construct FRET signal and remove photobleaching
-    FRETd = cell(1, length(origd));
-    rawd = cell(1, length(origd));
-	idxs = [];
-    for n = 1:length(origd)
+    fret = {};
+    don = {};
+    acc = {};
+    idxs = [];
+    for n = 1:length(raw_data)
         if mask(n)
-            if ShowProgress
+            if args.show_progress
                 disp(sprintf('   processing trace: %d', n));
             end
 
             % every 1st column is assumed to contain donor signal,
             % whereas every 2nd column is assumed to contain acceptor
-            don = origd{n}(:, 1);
-            acc = origd{n}(:, 2);
-            fret = acc ./ (don + acc);
+            dn = raw_data{n}(:, 1);
+            ac = raw_data{n}(:, 2);
+            fr = ac ./ (dn + ac);
    
    			% clip outlier points 
-            fret(fret<ClipRange(1)) = ClipRange(1);
-            fret(fret>ClipRange(2)) = ClipRange(2);
+            fr(fr<args.clip_range(1)) = args.clip_range(1);
+            fr(fr>args.clip_range(2)) = args.clip_range(2);
 
-            if RemoveBleaching
+            if args.remove_bleaching
                 % find photobleaching point in donor and acceptor
-                id = photobleach_index(don);
-                ia = photobleach_index(acc);
+                id = photobleach_index(dn);
+                ia = photobleach_index(ac);
             else
-                id = length(don);
-                ia = length(acc);
+                id = length(dn);
+                ia = length(ac);
             end
             
             % sanity check: donor bleaching should result in acceptor bleaching
             % but we'll allow a few time points tolerance
 			tol = 5;
-            if (ia < (id + tol)) & (min(id,ia) >= MinLength)
+            if (ia < (id + tol)) & (min(id,ia) >= args.min_length)
 				rng = 1:min(id,ia);
-				outliers = sum((fret(rng)<=ClipRange(1)) | (fret(rng)>=ClipRange(2)));
-				if (outliers <= MaxOutliers)
+				outliers = sum((fr(rng)<=args.clip_range(1)) | (fr(rng)>=args.clip_range(2)));
+				if (outliers <= args.max_outliers)
                 	% keep stripped signal
-                	FRETd{n} = fret(1:min(id,ia));
-                	rawd{n} = [don(1:min(id,ia)) acc(1:min(id,ia))];
+                	fret{end+1} = fr(1:min(id,ia));
+                	don{end+1} = dn(1:min(id,ia));
+                    acc{end+1} = ac(1:min(id,ia));
 					idxs(end+1) = n;
-			    elseif ShowProgress
+			    elseif args.show_progress
                 	disp(sprintf('   rejecting trace (too many outlier points): %d', n));
 				end
             end
         else
-            if ShowProgress
+            if args.show_progress
                 disp(sprintf('   skipping trace: %d', n));
             end
         end
     end
 
-    FRET = {FRET{:} FRETd{~cellfun(@isempty, FRETd)}};
-    raw = {raw{:},  rawd{~cellfun(@isempty, rawd)}};
-    orig = {orig{:}, origd{:}};
-    labels = {labels{:}, labelsd{:}};
+    data(d).fret = {fret{:}};
+    data(d).donor = {don{:}};
+    data(d).acceptor = {acc{:}};
+    data(d).idxs = [idxs(:)];
+    data(d).labels = {labels{idxs}};
     clear dat;
 end
