@@ -28,7 +28,7 @@ function data = synth_data_fret(u, N, T, varargin)
 % Variable Inputs
 % ---------------
 %
-% 'ExpLength' (boolean)
+% 'exp_length' (boolean)
 %	Use an exponential distribution for the trace lengths, with 
 %   average length T.
 %
@@ -36,7 +36,7 @@ function data = synth_data_fret(u, N, T, varargin)
 % -------
 %
 % data (Nx1 struct)
-%   .FRET (Tx1)
+%   .fret (Tx1)
 %		Synthetically generated FRET trace
 %	.z (Tx1)
 %		State index at each time point for each trace
@@ -56,20 +56,23 @@ function data = synth_data_fret(u, N, T, varargin)
 % Jan-Willem van de Meent
 % $Revision: 1.2$  $Date: 2011/08/10$
 
-% parse variable arguments
-ExpLength = false;
+% parse inputs
+ip = InputParser();
+ip.StructExpand = true;
+ip.addRequired('u', @isstruct);
+ip.addRequired('N', @isscalar);
+ip.addRequired('T', @isscalar);
+ip.addParamValue('exp_length', false, @isscalar);
+ip.parse(u, N, T, varargin{:});
 
-for i = 1:length(varargin)
-    if isstr(varargin{i})
-        switch lower(varargin{i})
-        case {'explength'}
-            ExpLength = varargin{i+1};
-        end
-    end
-end 
+% collect inputs
+args = ip.Results;
+u = args.u;
+N = args.N;
+T = args.T;
 
 % generate trace lengths
-if ExpLength
+if args.exp_length
 	Tn = ceil(exprnd(T, [N 1]));
 else
 	Tn = ones([N 1]) .* T;
@@ -121,7 +124,7 @@ for n = 1:N
 	FRET{n} = x{n} + randn(size(z{n})) .* theta{n}.sigma(z{n});
 end
 
-data = struct('FRET', FRET, ...
+data = struct('fret', fret, ...
               'z', z, ...
               'x', x, ...
               'theta', theta);
