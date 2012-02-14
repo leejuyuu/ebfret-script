@@ -2,21 +2,29 @@ function [index, d] = photobleach_index(signal, sigma, threshold)
 % Finds the point in a FRET donor/acceptor signal where 
 % photobleaching occurs.
 %
-% INPUT
-%   signal      A 1D donor or acceptor signal 
-%   sigma       Optional width (std dev) of gaussian kernel 
-%               for smoothing of detection signal (default = 1)
-%   threshold   Return 0 if no peak found above a certain threshold
+% Inputs
+% ------
+% signal : (Tx1)
+% 	A 1D donor or acceptor signal 
+% sigma : float
+% 	Optional width (std dev) of gaussian kernel for smoothing of 
+%   detection signal (default = 1.0)
+% threshold : float (optional)
+% 	Return 0 if no peak found above a certain threshold
 % 
-% OUTPUT 
-%   index       Index of the bleaching point. Returns length(signal)
-%               if no bleaching point is found.
-%   d           Detection signal 
+% Outputs
+% ------- 
+% index : int
+%	Index of the bleaching point. Returns length(signal) if no 
+%   bleaching point is found.
+% d : (Tx1)
+%	Detection signal 
 % 
-%  Jan-Willem van de Meent
-%  $Revision: 1.20 $  $Date: 2011/05/04$
-%  $Revision: 1.10 $  $Date: 2011/04/27$
-%  $Revision: 1.00 $  $Date: 2011/04/15$
+% Jan-Willem van de Meent
+% $Revision: 1.30 $  $Date: 2012/02/13$
+% $Revision: 1.20 $  $Date: 2011/05/04$
+% $Revision: 1.10 $  $Date: 2011/04/27$
+% $Revision: 1.00 $  $Date: 2011/04/15$
 
 T = length(signal);
 
@@ -32,7 +40,7 @@ T = length(signal);
 %     sb(t) = std(signal(t:end));
 % end
 
-% forward mean: mf(t) = mean(signal(1:end))
+% forward mean: mf(t) = mean(signal(1:t))
 mf = (tril(ones(T)) * signal) ./ (1:T)';
 % foward std dev: std(signal(1:t))
 sf = sqrt((tril(ones(T)) * signal.^2) ./ (1:T)' - mf.^2);
