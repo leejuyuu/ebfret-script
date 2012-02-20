@@ -1,24 +1,36 @@
 function [u, L, vb, vit] = hmi(data, u0, varargin)
-% [u, L, vb. vit] = hmi(data, u0)
+% [u, L, vb, vit] = hmi(data, u0)
 %
-% Runs a hierarchical inference proces on a collection of single 
-% molecule FRET time series to determine the levels of the FRET
-% states, as well as the transition rates between the states.
+% Runs a hierarchical inference process on a collection of single 
+% molecule FRET time series (or traces) using a Hidden Markov Model.
 %
-% In addition to detecting the best parameters for each trace,
-% this method also calculates a set of hyperparameters that
-% define the distribution of parameters over all traces. 
+% The inference process iteratively performs two steps:
+%
+% 1. Run Variational Bayes Expectation Maximization (VBEM)
+%    on each Time Series. 
+%
+%    This yields two distributions q(theta | w) and q(z) that approximate
+%    the posterior over the model parameters and latent states 
+%    for each trace.
+%
+% 2. Update the hyperparameters for the distribution p(theta | u).
+%
+%    This distribution, which plays the role of a prior on the 
+%    parameters in the VBEM iterations, represents an aggregate
+%    over the ensemble of time series, reporting on both the average
+%    parameter value and the variability from molecule to molecule.
+%    
 %
 % Inputs
 % ------
 %
 %   data : (N x 1) cell 
 %     Time series data on which inference is to be performed.
-%     Each data{n} should be a 1-dim vector of time points.
+%     Each data{n} should be a 1d vector of time points.
 %   
 %   u0 : struct 
-%     Initial guess for hyperparameters of the prior p(theta | u) 
-%     over the model parameters theta.
+%     Initial guess for hyperparameters of the ensemble distribution
+%     p(theta | u) over the model parameters.
 %
 %     .A : (K x K)
 %         Dirichlet prior for each row of transition matrix
@@ -34,6 +46,8 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %         Normal-Wishart prior - degrees of freedom
 %         (must be equal to beta+1)
 %
+%     Note: The current implementation only supports D=1 signals
+%
 %
 % Variable Inputs
 % ---------------
@@ -43,45 +57,31 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %     'ml' for maximum likelihood, 'mm' for method of moments.
 %
 %   restarts : int
-%     Number of VBEM restarts to perform when to determine the 
-%     optimal values for the variational parameters w.
+%     Number of VBEM restarts to perform for each trace.
 %
 %   do_restarts : 'init', 'always'
 %     Specifies whether restarts should be performed only when 
 %     determining the initial value of w (default, faster), or at 
-%     every hierarchical iteration (more accurate).
+%     every hierarchical iteration (slower, but in some cases more 
+%     accurate).
 %
 %   threshold : float
 %     Convergence threshold. Execution halts when fractional increase 
 %     in total summed evidence drops below this value.
 %
-%   verbose : boolean
-%     Print status information.
-%
 %   maxiter : int (default 100)
 %     Maximum number of iterations 
 %
-%   ignore : {'none', 'spike', 'intermediate', 'all'}
-%      Ignore states with length 1 on viterbi path that either
-%      collapse back to the previous state ('spike') or move
-%      to a third state ('intermediate').
+%   verbose : boolean
+%     Print status information.
+%
+%   vbem_opts : struct
+%     Struct storing variable inputs for VBEM algorithm
+%     (see function documentation)
+%
 %
 % Outputs
 % -------
-%
-%   theta : struct
-%     Maximum likelihood parameters calculated from the 
-%     hyperparameters of best run. (same fields as u)
-%
-%     .A : (K x K)
-%         Transition matrix. A(i, j) gives probability of switching 
-%         from state i to state j at each time point
-%     .pi : (1 x K)
-%         Initial probability of each state
-%     .mu : (1 x K)
-%         FRET emission levels for each state
-%     .sigma : (1 x K)
-%         FRET emission noise for each FRET state
 %
 %   u : struct
 %     Optimized hyperparameters (same fields as u0)
@@ -94,7 +94,8 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %     Output of VBEM algorithm for each trace
 %
 %     .w : struct
-%         Variational parameters (same fields as u)
+%         Variational parameters for appromate posterior q(theta | w) 
+%         (same fields as u)
 %     .L : float
 %         Lower bound for evidence
 %     .stat : struct
@@ -111,47 +112,26 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 % Jan-Willem van de Meent
 % $Revision: 1.0$  $Date: 2011/08/04$
 
+% parse inputs
+ip = InputParser();
+ip.StructExpand = true;
+ip.addRequired('data', @iscell);
+ip.addRequired('u0', @isstruct);
+ip.addParamValue('hstep', 'ml', ...
+                  @(s) any(strcmpi(s, {'ml', 'mm'})));
+ip.addParamValue('restarts', 10, @isscalar);
+ip.addParamValue('args.do_restarts', 'init', ...
+                  @(s) any(strcmpi(s, {'always', 'init'})));
+ip.addParamValue('threshold', 1e-5, @isscalar);
+ip.addParamValue('maxiter', 100, @isscalar);
+ip.addParamValue('boolean', true, @isscalar);
+ip.addParamValue('vbem_opts', struct(), @isstruct);
+ip.parse(data, u0, varargin);
 
-% parse variable arguments
-hstep = 'ml';
-restarts = 20;
-do_restarts = 'init';
-threshold = 1e-5;
-verbose = false;
-maxiter = 100;
-ignore = 'none';
-for i = 1:length(varargin)
-    if isstr(varargin{i})
-        switch lower(varargin{i})
-        case {'hstep'}
-            val = lower(varargin{i+1});
-            switch val
-            case {'ml','mm'}
-                hstep = val;
-            otherwise
-                err = MException('HMI:HstepUnknown', ...
-                                 'hstep must be one of ''ml'' or ''mm''');
-                raise(err);
-            end
-        case {'restarts'}
-            restarts = varargin{i+1};
-        case {'do_restarts'}
-            val = lower(varargin{i+1});
-            switch val
-            case {'init', 'always'}
-                do_restarts = val;
-            end
-        case {'threshold'}
-            threshold = varargin{i+1};
-        case {'verbose'}
-            verbose = varargin{i+1};
-        case {'maxiter'}
-            maxiter = varargin{i+1};
-        case {'ignore'}
-            ignore = varargin{i+1};
-        end
-    end
-end 
+% collect inputs
+args = ip.Results;
+data = args.data;
+u0 = args.u0;
 
 % get dimensions
 N = length(data);
@@ -160,10 +140,11 @@ K = length(u0.pi);
 converged = false;
 it = 1;
 u(it) = u0;
+% main loop for hierarchical inference process
 while ~converged
     % initialize guesses for w    
-    if (it == 1) | strcmp(do_restarts, 'always')
-        R = restarts;
+    if (it == 1) | strcmpi(args.do_restarts, 'always')
+        R = args.restarts;
         for n = 1:N
             % do not randomize first restart
 			if (it == 1)
@@ -183,9 +164,6 @@ while ~converged
     end
 
     % run vbem on each trace 
-    options.threshold = threshold;
-    %options.maxiter = maxiter; 
-    options.ignore = ignore; 
     for n = 1:N
         % if verbose
         %     fprintf('hmi init: n = %d\n', n);
@@ -193,7 +171,7 @@ while ~converged
         L{it,n} = [-Inf];
         % loop over restarts
         for r = 1:R
-            [w_, L_, stat_] = vbem(data{n}, w0(n,r), u(it), options);
+            [w_, L_, stat_] = vbem(data{n}, w0(n,r), u(it), vbem_opts);
             % keep result if L better than previous restarts
             if L_(end) > L{it, n}(end)
                 w(it, n) = w_;
@@ -206,13 +184,13 @@ while ~converged
     % calculate summed evidence
     sL(it) = sum(cellfun(@(l) l(end), {L{it,:}}));
 
-    if verbose
+    if args.verbose
         fprintf('hmi iteration: %d, L: %e, rel increase: %.2e\n', it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it));
     end    
 
     % check for convergence
     if it > 1
-        if (sL(it) - sL(it-1)) < threshold * abs(sL(it-1)) | it > maxiter
+        if (sL(it) - sL(it-1)) < args.threshold * abs(sL(it-1)) | it > args.maxiter
             if sL(it) < sL(it-1)
               it = it-1;
             end
@@ -221,7 +199,7 @@ while ~converged
     end
 
     % run hierarchical updates
-    if strcmp(hstep, 'ml')
+    if strcmp(args.hstep, 'ml')
       u(it+1) = hstep_ml(w(it,:), u(it));
     else
       u(it+1) = hstep_mm(w(it,:), u(it), stat(it,:));
