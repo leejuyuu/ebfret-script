@@ -128,8 +128,8 @@ for d = 1:length(data_files)
     raw_data = mat2cell(dat, size(dat,1), 2 * ones(size(dat,2) / 2, 1));
 
     % store raw data in output
-    raw(d).donor = cellfun(@(d) d(:,1), raw_data, 'UniformOutput', false);
-    raw(d).acceptor = cellfun(@(d) d(:,2), raw_data, 'UniformOutput', false);
+    raw(d).donor = cellfun(@(rd) rd(:,1), raw_data, 'UniformOutput', false);
+    raw(d).acceptor = cellfun(@(rd) rd(:,2), raw_data, 'UniformOutput', false);
 
     % mask out bad traces
     mask = ones(length(raw_data),1);
@@ -193,5 +193,5 @@ for d = 1:length(data_files)
     data(d).acceptor = {acc{:}};
     data(d).idxs = [idxs(:)];
     data(d).labels = {labels{idxs}};
-    clear dat;
+    data(d).file_name = data_files{d};
 end
