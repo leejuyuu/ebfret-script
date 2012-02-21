@@ -61,6 +61,16 @@ function [mi, hz] = mi_xz(theta, T, varargin)
         end
     end 
 
+    % ensure theta values are (K x 1) and not (1 x K)
+    K = length(theta.mu);
+    fn = fields(theta);
+    for f = 1:length(fn)
+        field = fn{f};
+        if length(theta.(field)(:)) == K
+            theta.(field) = theta.(field)(:);
+        end
+    end
+
     % conditional distribution p(x | z, theta)
     function p = px_z(x, k, theta)
         dx = bsxfun(@minus, x, theta.mu(k));
@@ -74,10 +84,9 @@ function [mi, hz] = mi_xz(theta, T, varargin)
     pxz = @(x, k, theta, pz) px_z(x, k, theta) .* pz(k);
 
     % marginal distribution p(x | theta)
-    px = @(x, K, theta, pz) sum(bsxfun(@times, px_z(x, 1:K, theta), pz(:)), 1);
+    px = @(x, K, theta, pz) sum(bsxfun(@times, px_z(x, (1:K)', theta), pz(:)), 1);
 
     % calculate pz(t,k) p(z(t)=k)
-    K = length(theta.mu);
     pz = zeros(T, K);
     pz(1,:) = theta.pi(:);
     for t = 2:T

@@ -8,7 +8,7 @@ function [I, H] = mi_gz(g, z)
     % g : (T,K)
     %	Estimates of responsibilities g(t,k) = p(z(t)=k | x)
     %
-    % z : (T,) or (T,K) 
+    % z : (T,) or (T,L) 
     %	True states (either integer or indicator format)
     %
     % Outputs
@@ -21,11 +21,12 @@ function [I, H] = mi_gz(g, z)
 	%  	gamma(t,k) and z(t,k)
     [T K] = size(g);
     if length(z(:)) == T
-        z = int_to_ind(z, K);
-    end     
+        z = int_to_ind(z(:));
+    end 
+    [T L] = size(z);    
     % calculate joint probabilities
     pgz = squeeze(mean(bsxfun(@times, reshape(g, [T K 1]), ...
-                                      reshape(z, [T 1 K])), 1));
+                                      reshape(z, [T 1 L])), 1));
     % calculate marginals
     pg = sum(pgz,2);
     pz = sum(pgz,1);
