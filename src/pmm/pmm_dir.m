@@ -7,7 +7,7 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 	% ------
 	%
 	% 	Xi : (N x D) or (N x E x D)
-	%		Posterior pseudocounts for each sample 
+	%		Posterior pseudo-counts for each sample 
 	%
 	%	u0 : (K x D) or (K x E x D) 
 	%		Initial guess for set of prior parameters for each 
@@ -134,41 +134,6 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 		% normalize gamma
 		g0 = bsxfun(@rdivide, g, sum(g, 1));
 		
-		% if it == 1
-		% 	% the lsqnonlin solver is a bit picky about its initial
-		% 	% guesses, so we'll use a method of moments step to make sure
-		% 	% we're in the right ballpark on our first iteration
-
-		% 	% sum Xi over d, and expand to size [N E D] again
-		% 	XI = bsxfun(@times, sum(Xi, 3), ones([1 1 D]));
-
-		% 	% expectation value of theta for each sample
-		% 	Ew_theta = Xi ./ XI;
-		% 	% expectation for variance of theta
-		% 	Vw_theta = Xi .* (XI - Xi) ./ (XI.^2 .* (XI + 1));
-
-		% 	% average over all samples, weigthing by g and trace length
-		% 	T = sum(sum(Xi, 3), 2);
-		% 	w = bsxfun(@times, g, T);
-		% 	w0 = bsxfun(@rdivide, w, sum(w, 1));
-
-		% 	E_theta = ...
-		% 	   reshape(sum(bsxfun(@times, w0', ... 
-		% 	                      reshape(Ew_theta, [1 N E D])), ...
-		% 	               2), [K E D]);
-		% 	V_theta = ...
-		% 	   reshape(sum(bsxfun(@times, w0', ...
-		% 	                      reshape(Vw_theta, [1 N E D])), ...
-		% 	               2), [K E D]);
-			 
-		% 	% solve for for u
-		% 	U_g = E_theta .* (1 - E_theta) ./ V_theta - 1;
-		% 	u_g = U_g .* E_theta;
-		% else
-		% 	% use previous result after first iteration
-		% 	u_g = u;
-		% end
-
 		% sum Xi over d coordinate 
 		Xi0 = sum(Xi, 3);
 
@@ -252,57 +217,3 @@ function err = root_fun(u_ked, u_ke0, Xi_ed, Xi_e0, g0_k)
 	Eu_log_theta = psi(u_ked) - psi(u_ke0 + u_ked);
 	% calculate solver error
 	err = (Eu_log_theta - Ew_log_theta);
-
-
-% function err = root_fun(u, Xi, g0)
-% 	% Root function for u update in M-step
-% 	%
-% 	% Inputs
-%     % ------
-%     %	
-%     %	u : 1 x D
-%     %	Xi : N x D
-%     % 	g0 : N x 1
-%     %
-%     % Outputs
-%     % -------
-%     % 
-%     %	err : 1 x D
-
-% 	% calculate posterior
-% 	w = bsxfun(@plus, Xi, u);
-% 	% calculate expectation of theta under posterior params
-% 	Ew_log_theta = bsxfun(@minus, psi(w), psi(sum(w, 2)));
-% 	% average over samples, weighted by responsibilities
-% 	% to obtain estimate of log(theta) for cluster
-% 	Ew_log_theta = sum(bsxfun(@times, g0, Ew_log_theta), 1);
-% 	% calculate expectation of theta under posterior params
-% 	Eu_log_theta = bsxfun(@minus, psi(u), psi(sum(u, 2)));
-% 	% weight solver error by exp(E_log_theta) mitigate
-% 	% divergence of psi(theta) for theta -> 0.
-% 	err = (Eu_log_theta - Ew_log_theta) ... 
-% 	      .* (exp(Ew_log_theta) + eps);
-
-
-% % equations for solver (see above)
-% function err = root_fun(uke, Xi, g0k)
-% 	% calculate updated posterior
-% 	wk = bsxfun(@plus, reshape(Xi, [N E D], 
-% 	                   reshape(uk, [1 E D]);
-
-% 	% calculate expectation of theta under posterior params
-% 	Ew_log_theta = bsxfun(@minus, psi(wk), psi(sum(w, 2)));
-% 	% average over samples, weighted by responsibilities
-% 	% to obtain estimate of log(theta) for cluster
-% 	Ew_log_theta = sum(bsxfun(@times, g0, Ew_log_theta), 1);
-% 	% weight solver error by exp(E_log_theta) mitigate
-% 	% divergence of psi(theta) for theta -> 0.
-
-
-% 	% solver error
-% 	err = (Eu_log_theta - Ew_log_theta)
-% 	      .* (exp(E_log_theta) + eps);
-	
-
-
-
