@@ -1,5 +1,5 @@
-function [w, L, stat] = vbem(x, w0, u, options)
-% function [w, L, stat] = vbem(x, w0, u, options)
+function [w, L, stat] = vbem(x, w0, u, varargin)
+% function [w, L, stat] = vbem(x, w0, u, varargin)
 %
 % Variational Bayes Expectation Maximization for a Hidden Markov Model
 % with Gaussian emissions.
@@ -37,20 +37,20 @@ function [w, L, stat] = vbem(x, w0, u, options)
 %       Initial guess for the variational parameters of the 
 %       approximating posterior q(theta | w). Same fields as u
 %
-%   options : struct
-%       Algorithm options
+% Variable Inputs
+% ---------------
 %
-%       .threshold : float (default: 1e-5)
-%           Convergence threshold. Execution halts when the relative
-%           increase in the lower bound evidence drop below threshold 
+%   threshold : float (default: 1e-5)
+%      Convergence threshold. Execution halts when the relative
+%      increase in the lower bound evidence drop below threshold 
 %
-%       .maxiter : int (default: 100)
-%           Maximum number of iteration before execution is truncated
+%   max_iter : int (default: 100)
+%      Maximum number of iteration before execution is truncated
 %
-%        .ignore : {'none', 'spike', 'intermediate', 'all'}
-%           Ignore states with length 1 on viterbi path that either
-%           collapse back to the previous state ('spike') or move
-%           to a third state ('intermediate').
+%   ignore : {'none', 'spike', 'intermediate', 'all'}
+%      Ignore states with length 1 on viterbi path that either
+%      collapse back to the previous state ('spike') or move
+%      to a third state ('intermediate').
 %
 % Outputs
 % -------
@@ -165,19 +165,23 @@ function [w, L, stat] = vbem(x, w0, u, options)
 
 Debug = false;
 
-% set defaults for options that are not supplied
-if nargin < 4
-    options = struct();
-end
-if ~isfield(options, 'threshold')    
-    options.threshold = 1e-5;
-end
-if ~isfield(options, 'maxiter')    
-    options.maxiter = 100;
-end
-if ~isfield(options, 'ignore')    
-    options.ignore = 'none';
-end
+% parse inputs
+ip = InputParser();
+ip.StructExpand = true;
+ip.addRequired('x', @(x) isnumeric(x) & (ndims(x)==2));
+ip.addRequired('w0', @isstruct);
+ip.addRequired('u', @isstruct);
+ip.addParamValue('threshold', 1e-5, @isscalar);
+ip.addParamValue('max_iter', 100, @isscalar);
+ip.addParamValue('ignore', 'none', ...
+                 @(s) any(strcmpi(s, {'none', 'spike', 'intermediate', 'all'})));
+ip.parse(x, w0, u, varargin{:});
+
+% collect inputs
+args = ip.Results;
+x = args.x;
+w0 = args.w0;
+u = args.u;
 
 % get dimensions
 [T D] = size(x);
@@ -191,7 +195,7 @@ if Debug
 end
 
 % Main loop of algorithm
-for it = 1:options.maxiter
+for it = 1:args.max_iter
     % fprintf('[debug] vbem iteration: %d\n', it)
 
     % E-STEP: UPDATE Q(Z)
@@ -233,7 +237,7 @@ for it = 1:options.maxiter
     end
 
     % print warning if lower bound decreases
-    if it>2 && ((L(it) - L(it-1)) < -10 * options.threshold * abs(L(it))) 
+    if it>2 && ((L(it) - L(it-1)) < -10 * args.threshold * abs(L(it))) 
         fprintf('Warning!!: Lower bound decreased by %e \n', ...
                 L(it) - L(it-1));
     end
@@ -244,20 +248,17 @@ for it = 1:options.maxiter
     % CB 10.60-10.63 and MJB 3.54 (JKC 25), 3.56 (JKC 21). 
 
     % check whether points need to be masked out
-    if ~strcmp(options.ignore, 'none')
-        z_hat = viterbi(E_ln_px_z, E_ln_A, E_ln_pi);
-        [g_f, xi_f] = jitter_filter(z_hat, g, xi, options); 
-    end
-
-    if strcmp(options.ignore, 'none')
+    if strcmp(args.ignore, 'none')
         w = m_step(u, x, g, xi);
     else
+        z_hat = viterbi(E_ln_px_z, E_ln_A, E_ln_pi);
+        [g_f, xi_f] = jitter_filter(z_hat, g, xi, args.ignore); 
         w = m_step(u, x, g_f, xi_f);
     end
 
     % check if the lower bound increase is less than threshold
     if (it>2)    
-        if abs((L(it) - L(it-1)) / L(it-1)) < options.threshold || ~isfinite(L(it)) 
+        if abs((L(it) - L(it-1)) / L(it-1)) < args.threshold || ~isfinite(L(it)) 
             L(it+1:end) = [];  
             break;
         end
