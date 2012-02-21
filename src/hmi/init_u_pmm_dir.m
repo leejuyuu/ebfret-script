@@ -26,7 +26,7 @@ function u = init_u_pmm_dir(M, vb, u, varargin)
     % Variable Inputs
     % ---------------
     %
-    % restarts : int
+    % restarts : int (default: 10)
     %   Number of VBEM restarts to perform for each trace.
     %
     % display : {'off', 'final', 'all'} (default: 'off')
