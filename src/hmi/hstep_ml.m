@@ -9,17 +9,17 @@ function u_new = hstep_ml(w, u)
 % of FRET traces and maximizes the total summed evidence by solving 
 % the system of equations:
 %
-%   Sum_n  Grad_u L^n  =  0
+%   Sum_n  Grad_u L_n  =  0
 %
 % Where u is the set of hyperparameters that determine the form of
-% the prior distributions in the parameters. The lower bound evidence
-% of the n-th trace is defined by:
+% the prior distribution on the parameters. L_n is the lower bound
+% evidence for the n-th trace, defined by:
 %
-%   L^n  =  Int d z^n d theta^n  q(z^n) q(theta^n)  
-%           ln[ p(x^n, z^n | theta^n) p(theta^n) / (q(z^n) q(theta^n)) ]
+%   L  =  Integral d z d theta  q(z) q(theta)  
+%         ln[ p(x, z | theta) p(theta) / (q(z) q(theta)) ]
 %
 % The approximate posteriors q(z) and q(theta), which have been
-% optimised in the VBEM process, are now kept constant as Sum L^n is
+% optimised in the VBEM process, are now kept constant as Sum L_n is
 % maximised wrt to u.
 %
 % 
@@ -57,7 +57,7 @@ function u_new = hstep_ml(w, u)
 % Jan-Willem van de Meent
 % $Revision: 1.10$  $Date: 2011/08/04$
 
-% TODO: this currently does not work for 2D donor/acceptor inference
+% Note: this currently does not work for 2D donor/acceptor inference
 %
 % Explanation of Updates
 % ----------------------
@@ -124,12 +124,13 @@ opts = optimset('display', 'off', 'tolX', threshold, 'tolFun', eps);
 %   weights = ones(N,1) / N;
 % end
 
-% Dummy weights
+% future proofing: allow weighting of traces. since this is a bit of
+% a cludge, we've disabled it for now
 for n = 1:N
   w(n).wt = 1;
 end
 
-% Init struct for updated params
+% initialize struct for updated params
 u_old = u;
 
 % (mu, lambda) ~ Normal-Gamma
@@ -198,15 +199,7 @@ w_pi = exp(E_log_wpi);
 
 %(pi): solve system of equations
 
-% %root_fun = @(u_pi) E_log_wpi - (psi(u_pi) - psi(sum(u_pi)));
-% root_fun = @(u_pi) (E_log_wpi - (psi(u_pi) - psi(sum(u_pi)))) .* (w_pi + eps);
-% u.pi = lsqnonlin(root_fun, ...
-%                  u_old.pi, ...
-%                  zeros(size(u_old.pi)) + 1e-6, ...
-%                  Inf + zeros(size(u_old.pi)), ...
-%                  opts);
-
-%get amplitude in right ballpark first
+% get norm of u.piin right ballpark first
 root_fun = @(P) (E_log_wpi - (psi(P * u.pi) - psi(sum(P * u.pi)))) .* (w_pi + eps);
 P = lsqnonlin(root_fun, 1, 0, Inf, opts);
 u.pi = P * u.pi;
@@ -227,11 +220,7 @@ end
 E_log_wA = arrayfun(@(w) w.wt * bsxfun(@plus, psi(w.A + EPS), -psi(sum(w.A + EPS, 2))), ...
                     w, 'UniformOutput', false);
 E_log_wA = mean(cat(3, E_log_wA{:}), 3);
-
-% calculate weights
 w_A = exp(E_log_wA);
-% w_A = arrayfun(@(w) w.A, w, 'UniformOutput', false); 
-% w_A = mean(cat(3, w_A{:}), 3);
 
 %A(k,:): solve system of equations
 u.A = u_old.A;
@@ -254,40 +243,3 @@ for k = 1:K
 end
 
 u_new = u;
-
-% u_new = struct('mu', u.mu, ...
-%                'beta', u.beta, ...
-%                'nu', u.nu, ...
-%                'W', u.W, ...
-%                'pi', u.pi, ...
-%                'A', u.A);
-
-
-% % Get Max Posterior Parameters (based on updated priors)
-% % (this is a pain)
-
-% p = cellfun(@(o) o.Wpi(:) - u_old.pi(:), out, 'UniformOutput', false);
-% p = sum([p{:}], 2);
-% Nk = cellfun(@(o) o.Nk(:), out, 'UniformOutput', false);
-% Nk = sum([Nk{:}], 2);
-% xbar = cellfun(@(o) o.Nk(:) .* o.xbar(:), out, 'UniformOutput', false);
-% xbar = sum([xbar{:}], 2) ./ Nk;
-% S = cellfun(@(o) o.Nk(:) .* squeeze(o.S), out, 'UniformOutput', false);
-% S = sum([S{:}], 2) ./ Nk;
-% A = cellfun(@(o) o.Wa - u_old.A, out, 'UniformOutput', false);
-% A = sum(cat(3, A{:}), 3);
-
-% % get posterior over all data (based on updated priors)
-% W = struct('pi', u.pi + p, ... 
-%            'A', u.A + A, ...
-%            'mu', (u.beta .* u.mu + Nk .* xbar) ./ (u.beta + Nk), ...
-%            'beta', u.beta + Nk, ...
-%            'W', 1./ (1 ./ u.W + Nk .* S + u.beta .* Nk .* (xbar - u.mu).^2 ./ (u.beta + Nk)), ...
-%            'nu', u.nu + Nk);
-
-% % Pack MAP results
-% w = struct();
-% w.pi = normalize(W.pi);
-% w.A = normalize(W.A, 2); 
-% w.mu = W.mu;
-% w.sigma = 1./sqrt(W.nu .* W.W);
