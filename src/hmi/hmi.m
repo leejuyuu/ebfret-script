@@ -72,10 +72,10 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %   maxiter : int (default 100)
 %     Maximum number of iterations 
 %
-%   verbose : boolean
+%   display : {'hstep', 'trace', 'off'} (default: 'off')
 %     Print status information.
 %
-%   vbem_opts : struct
+%   vbem : struct
 %     Struct storing variable inputs for VBEM algorithm
 %     (see function documentation)
 %
@@ -120,13 +120,15 @@ ip.addRequired('u0', @isstruct);
 ip.addParamValue('hstep', 'ml', ...
                   @(s) any(strcmpi(s, {'ml', 'mm'})));
 ip.addParamValue('restarts', 10, @isscalar);
-ip.addParamValue('args.do_restarts', 'init', ...
+ip.addParamValue('do_restarts', 'init', ...
                   @(s) any(strcmpi(s, {'always', 'init'})));
 ip.addParamValue('threshold', 1e-5, @isscalar);
 ip.addParamValue('maxiter', 100, @isscalar);
 ip.addParamValue('boolean', true, @isscalar);
-ip.addParamValue('vbem_opts', struct(), @isstruct);
-ip.parse(data, u0, varargin);
+ip.addParamValue('display', 'off', ...
+                  @(s) any(strcmpi(s, {'hstep', 'trace', 'off'})));
+ip.addParamValue('vbem', struct(), @isstruct);
+ip.parse(data, u0, varargin{:});
 
 % collect inputs
 args = ip.Results;
@@ -165,13 +167,13 @@ while ~converged
 
     % run vbem on each trace 
     for n = 1:N
-        % if verbose
-        %     fprintf('hmi init: n = %d\n', n);
-        % end
+        if strcmpi(args.display, 'trace')
+            fprintf('hmi: %d states, it %d, trace %d of %d\n', K, it, n, N);
+        end 
         L{it,n} = [-Inf];
         % loop over restarts
         for r = 1:R
-            [w_, L_, stat_] = vbem(data{n}, w0(n,r), u(it), vbem_opts);
+            [w_, L_, stat_] = vbem(data{n}, w0(n,r), u(it), args.vbem);
             % keep result if L better than previous restarts
             if L_(end) > L{it, n}(end)
                 w(it, n) = w_;
@@ -184,8 +186,8 @@ while ~converged
     % calculate summed evidence
     sL(it) = sum(cellfun(@(l) l(end), {L{it,:}}));
 
-    if args.verbose
-        fprintf('hmi iteration: %d, L: %e, rel increase: %.2e\n', it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it));
+    if strcmpi(args.display, 'hstep')
+        fprintf('hmi: %d, L: %e, rel increase: %.2e\n', it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it));
     end    
 
     % check for convergence
