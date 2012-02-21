@@ -57,7 +57,7 @@ while i <= length(varargin)
             % add vb fields to data struct
             fields = fieldnames(vb);
             for f = 1:length(fields)
-                [data.(fields{f})] = vb.(fields{f})
+                [data.(fields{f})] = vb.(fields{f});
             end
             
         case {'vit'}
@@ -66,7 +66,7 @@ while i <= length(varargin)
             % add vit fields to data struct
             fields = fieldnames(vit);
             for f = 1:length(fields)
-                [data.(fields{f})] = vit.(fields{f})
+                [data.(fields{f})] = vit.(fields{f});
             end
 
         case {'labels'}
@@ -77,7 +77,7 @@ while i <= length(varargin)
                 labels = varargin{i+1};
             end
             for n = 1:length(labels)
-                data(n).label = labels{n}
+                data(n).label = labels{n};
             end
         end
                 

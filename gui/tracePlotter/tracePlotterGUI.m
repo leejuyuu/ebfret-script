@@ -67,6 +67,15 @@ function tracePlotterGUI_OpeningFcn(hObject, eventdata, handles, varargin)
         data = handles.data;
         handles.subPlots = 1;
 
+
+        % gamma/xi plotting disabled 
+        if isfield(data, 'stat')
+            handles.subPlots = handles.subPlots + 1;
+            handles.gamPlot = handles.subPlots;
+        else
+            handles.gamPlot = 0;
+        end
+
         % if we have the raw signal, assign a subplot for it
         if isfield(data,'don') & isfield(data,'acc')
             handles.subPlots = handles.subPlots + 1;
@@ -83,8 +92,6 @@ function tracePlotterGUI_OpeningFcn(hObject, eventdata, handles, varargin)
             handles.K = 0 
         end
 
-        % gamma/xi plotting disabled (for now)
-        handles.gamPlot = 0;
 
         % if isfield(data,'g') & isfield(data,'xi')
         %     handles.K = size(data(1).g, 2);
@@ -193,23 +200,19 @@ function tracePlotterGUI_PlotChanged(hObject, eventdata, handles)
             nmsk(~msk) = NaN;
 
             % plot x_hat
-            l = scatter(t(:) .* nmsk(:), d.x(:) .* nmsk(:), 18, c(k,:), 'Filled');
-            set(l, 'LineWidth', 1.5)
+            l = scatter(t(:) .* nmsk(:), d.x(:) .* nmsk(:), 12, c(k,:), 'Filled');
 
-            % % plot mu posterior confidence intervals
-            % s_mu = sqrt(1 ./ (w.beta(k) .* w.W(k) .* (w.nu(k) - 2)));
-            % l = plot(t(:) .* nmsk(:), (x_hat(:) + 2.*s_mu) .* nmsk(:), ... 
-            %          '-', 'Color', c(k,:));
-            % l = plot(t(:) .* nmsk(:), (x_hat(:) - 2.*s_mu) .* nmsk(:), ...
-            %          '-', 'Color', c(k,:));
+            % plot mu posterior confidence intervals
+            if isfield(d, 'w')
+                s_mu = sqrt(1 ./ (d.w.beta(k) .* d.w.W(k) .* (d.w.nu(k) - 2)));
+                l = scatter(t(:) .* nmsk(:), (d.x(:) - 2 .* s_mu) .* nmsk(:), 1, c(k,:), 'Filled');
+                l = scatter(t(:) .* nmsk(:), (d.x(:) + 2 .* s_mu) .* nmsk(:), 1, c(k,:), 'Filled');
 
-            % % plot emission confidence intervals
-            % s = 1./sqrt(w.nu(k) * w.W(k));
-            % l = plot(t(:) .* nmsk(:), (x_hat(:)+2.*s) .* nmsk(:), ...
-            %          '-.', 'Color', c(k,:));
-            % l = plot(t(:) .* nmsk(:), (x_hat(:)-2.*s) .* nmsk(:), ...
-            %          '-.', 'Color', c(k,:));
-
+                % % plot emission confidence intervals
+                s_x = 1./sqrt(d.w.nu(k) * d.w.W(k));
+                l = scatter(t(:) .* nmsk(:), (d.x(:) - 2 .* s_x) .* nmsk(:), 1, c(k,:), 'Filled');
+                l = scatter(t(:) .* nmsk(:), (d.x(:) + 2 .* s_x) .* nmsk(:), 1, c(k,:), 'Filled');
+            end
             % % append to labels
             % mu_labels{k} = sprintf('mu_%d = %.2f +/- %.2f', k, w.mu(k), s_mu);
             % sigma_labels{k} = sprintf('sigma_%d = %.2f +/- %.2f', k, s, 1./sqrt(2.*w.nu(k).*w.W(k).^2));
@@ -247,6 +250,21 @@ function tracePlotterGUI_PlotChanged(hObject, eventdata, handles)
        end
     end
 
+    % plot gamma 
+    if handles.gamPlot
+        axes(handles.plotAxes(handles.gamPlot));
+        cla();
+        % loop over states
+        c = 0.66 .* hsv(K);
+        K = handles.K;
+        for k = 1:K
+            plot(t, d.stat.gamma(:,k), 'Color', c(k,:))
+            xlim([0 T])
+            ylim([-0.1 1.1])
+            hold on;
+        end
+    end
+
     % plot raw signal (if specified)
     if handles.rawPlot
         if length(d.don) > T
@@ -276,45 +294,6 @@ function tracePlotterGUI_PlotChanged(hObject, eventdata, handles)
         [ah ab] = hist(acc, 51);
         plot(ah, ab, 'r-');
     end
-
-    % if length(fieldnames(d)) > 1
-    %     hold on;
-
-    %     % % loop over states
-    %     % c = 0.66 .* hsv(K);
-    %     % for k = 1:K
-    %     %     msk = (z_hat == k)
-    %     %     nmsk = ones(size(msk));
-    %     %     nmsk(~msk) = NaN;
-
-    %     %     % plot x_hat
-    %     %     l = plot(t(:) .* nmsk(:), x_hat(:) .* nmsk(:), '--', 'Color', c(k,:));
-    %     %     set(l, 'LineWidth', 1.5)
-
-    %     %     % plot mu posterior confidence intervals
-    %     %     s_mu = sqrt(1 ./ (w.beta(k) .* w.W(k) .* (w.nu(k) - 2)));
-    %     %     l = plot(t(:) .* nmsk(:), (x_hat(:) + 2.*s_mu) .* nmsk(:), ... 
-    %     %              '-', 'Color', c(k,:));
-    %     %     l = plot(t(:) .* nmsk(:), (x_hat(:) - 2.*s_mu) .* nmsk(:), ...
-    %     %              '-', 'Color', c(k,:));
-
-    %     %     % plot emission confidence intervals
-    %     %     s = 1./sqrt(w.nu(k) * w.W(k));
-    %     %     l = plot(t(:) .* nmsk(:), (x_hat(:)+2.*s) .* nmsk(:), ...
-    %     %              '-.', 'Color', c(k,:));
-    %     %     l = plot(t(:) .* nmsk(:), (x_hat(:)-2.*s) .* nmsk(:), ...
-    %     %              '-.', 'Color', c(k,:));
-
-    %     %     % append to labels
-    %     %     mu_labels{k} = sprintf('mu_%d = %.2f +/- %.2f', k, w.mu(k), s_mu);
-    %     %     sigma_labels{k} = sprintf('sigma_%d = %.2f +/- %.2f', k, s, 1./sqrt(2.*w.nu(k).*w.W(k).^2));
-    %     %     Nk_labels{k} = sprintf('N_%d = %05.1f', k, sum(stat.gamma(:,k)));
-
-    %     %     hold on;
-    %     % end
-    % end
-
-
 
     % % add text labels
     % t = text(0.05*T, 1.10, sprintf('L/T = %.1f', L(end)/T), 'FontSize', 14);
