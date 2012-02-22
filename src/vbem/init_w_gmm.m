@@ -1,4 +1,4 @@
-function w = init_w_gmm(x, u)
+function w = init_w_gmm(x, u, varargin)
 	% w = init_w_gmm(signal, u, varargin)
 	%
     % Runs a Gaussian Mixture Model EM on the data to initialize the
@@ -15,6 +15,17 @@ function w = init_w_gmm(x, u)
     % u : struct
     %   Hyperparameters for VBEM/HMI algorithm
     %
+    %
+    % Variable Inputs
+    % ---------------
+    %
+    % hard_kmeans : boolean (default: true)
+    %   Run hard kmeans algorithm to obtain location for states,
+    %   prior to running soft kmeans.
+    %
+    % threshold : float (default: 1e-5)
+    %   Tolerance when running gmdistribution.fit
+    %
     % Outputs
     % -------
     %
@@ -29,7 +40,9 @@ function w = init_w_gmm(x, u)
     ip.StructExpand = true;
     ip.addRequired('x', @isnumeric);
     ip.addRequired('u', @isstruct);
-    ip.parse(x, u);
+    ip.addParamValue('hard_kmeans', false, @isscalar);
+    ip.addParamValue('threshold', 1e-5, @isscalar);
+    ip.parse(x, u, varargin{:});
     args = ip.Results;
     x = args.x;
     u = args.u;
@@ -40,10 +53,8 @@ function w = init_w_gmm(x, u)
     % structs being dissimilar because of the order of the fields
     w = u;
 
-    hard_kmeans = false;
-    gmm_opts.TolFun = 1e-3;
-
-    if hard_kmeans
+    gmm_opts.TolFun = args.threshold;
+    if args.hard_kmeans
         % run hard kmeans to get cluster centres
         [idx mu] = kmeans(x, K);
         % run soft kmeans to get mean and variance of each state;
