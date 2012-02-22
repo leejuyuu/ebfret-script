@@ -115,7 +115,7 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
 
         % save results to disk
         save_name = sprintf('%s.mat', opts.save_name);
-        save(save_name, 'data', 'opts', 'runs');
+        save(save_name, 'x', 'opts', 'runs');
     
     catch ME
         % ok something went wrong here, so dump workspace to disk for inspection

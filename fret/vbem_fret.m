@@ -121,7 +121,7 @@ function vbem_fret(save_name, x, K_values, restarts, varargin)
 
 		% save results to disk
 		save_name = sprintf('%s.mat', opts.save_name);
-		save(save_name, 'data', 'opts', 'runs');
+		save(save_name, 'x', 'opts', 'runs');
 	
 	    % close matlabpool if necessary
 	    if opts.num_cpu > 1
