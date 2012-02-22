@@ -47,7 +47,7 @@ function [vb, u, idxs] = majority_states(K, vb, u, varargin)
     % $Revision: 1.0$  $Date: 2011/02/14$
 
     % parse inputs
-    ip = InputParser();
+    ip = inputParser();
     ip.StructExpand = true;
     ip.addRequired('K', @isscalar);
     ip.addRequired('vb', @isstruct);

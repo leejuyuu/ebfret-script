@@ -25,7 +25,7 @@ function w = init_w_gmm(x, u)
     % $Revision: 1.0$  $Date: 2011/02/14$
 
     % parse inputs
-    ip = InputParser();
+    ip = inputParser();
     ip.StructExpand = true;
     ip.addRequired('x', @isnumeric);
     ip.addRequired('u', @isstruct);

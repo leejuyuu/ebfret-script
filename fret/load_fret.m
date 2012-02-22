@@ -82,7 +82,7 @@ function [data, raw] = load_fret(data_files, varargin)
 % $Revision: 1.10 $  $Date: 2012/02/10$
 
 % parse inputs
-ip = InputParser();
+ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data_files', @(d) iscell(d) | isstr(d));
 ip.addParamValue('has_labels', true, @isscalar);

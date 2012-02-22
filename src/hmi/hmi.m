@@ -113,7 +113,7 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 % $Revision: 1.0$  $Date: 2011/08/04$
 
 % parse inputs
-ip = InputParser();
+ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);

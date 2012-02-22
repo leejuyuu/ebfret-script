@@ -43,7 +43,7 @@ function vbem_fret(save_name, data_files, K_values, restarts, varargin)
 	% Results are saved to 'save_name.mat'.
 
 	% parse input
-    ip = InputParser();
+    ip = inputParser();
     ip.StructExpand = true;
     ip.addRequired('save_name', @isstr);
 	ip.addRequired('data_files', @(d) iscell(d) | isstr(d));
