@@ -69,7 +69,7 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %     Convergence threshold. Execution halts when fractional increase 
 %     in total summed evidence drops below this value.
 %
-%   maxiter : int (default 100)
+%   max_iter : int (default 100)
 %     Maximum number of iterations 
 %
 %   display : {'hstep', 'trace', 'off'} (default: 'off')
@@ -123,7 +123,7 @@ ip.addParamValue('restarts', 10, @isscalar);
 ip.addParamValue('do_restarts', 'init', ...
                   @(s) any(strcmpi(s, {'always', 'init'})));
 ip.addParamValue('threshold', 1e-5, @isscalar);
-ip.addParamValue('maxiter', 100, @isscalar);
+ip.addParamValue('max_iter', 100, @isscalar);
 ip.addParamValue('boolean', true, @isscalar);
 ip.addParamValue('display', 'off', ...
                   @(s) any(strcmpi(s, {'hstep', 'trace', 'off'})));
@@ -192,7 +192,7 @@ while ~converged
 
     % check for convergence
     if it > 1
-        if (sL(it) - sL(it-1)) < args.threshold * abs(sL(it-1)) | it > args.maxiter
+        if (sL(it) - sL(it-1)) < args.threshold * abs(sL(it-1)) | it > args.max_iter
             if sL(it) < sL(it-1)
               it = it-1;
             end
