@@ -151,7 +151,7 @@ while ~converged
 			if (it == 1)
                 for r = 1:R
                    % use gmm to initialize posterior params
-            	   w0(n, r) =  init_w_gmm(u0, length(data{n}));
+            	   w0(n, r) =  init_w_gmm(data{n}, u0);
                 end
 			else
                 % do no randomize first restart
