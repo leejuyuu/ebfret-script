@@ -49,7 +49,7 @@ function data = synth_data_fret(u, N, T, varargin)
 %			Initial probability for states
 %		.mu (Kx1)
 %			Emission FRET levels of states
-%		.lambda (Kx1)
+%		.Lambda (Kx1)
 %			Emission precision (1/variance) for states
 %
 %    
@@ -57,7 +57,7 @@ function data = synth_data_fret(u, N, T, varargin)
 % $Revision: 1.2$  $Date: 2011/08/10$
 
 % parse inputs
-ip = InputParser();
+ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('u', @isstruct);
 ip.addRequired('N', @isscalar);
@@ -85,7 +85,7 @@ for n = 1:N
 	theta{n} = struct('A', zeros(K,K), ...
 	                  'pi', zeros(K,1), ...
 	                  'mu', zeros(K,1), ...
-	                  'sigma', zeros(K,1));
+	                  'Lambda', zeros(K,1));
 	% initial probabilities 
 	theta{n}.pi = dirrnd(u.pi');
 	% loop over states
@@ -94,10 +94,10 @@ for n = 1:N
 		% transition matrix row k 
 		theta{n}.A(k, :) = dirrnd(u.A(k, :));
 		% emission model std dev
-		theta{n}.sigma(k) = 1 ./ sqrt(wishrnd(u.W(k), u.nu(k)));
+		theta{n}.Lambda(k) = wishrnd(u.W(k), u.nu(k));
 		% emission model state mean
 		theta{n}.mu(k) = u.mu(k) + randn() ...
-		                .* (theta{n}.sigma(k) ./ sqrt(u.beta(k)));
+		                ./ sqrt(theta{n}.Lambda(k) * u.beta(k));
 	end
 
 	% generate trace states 
@@ -121,7 +121,7 @@ for n = 1:N
 	x{n} = theta{n}.mu(z{n});
 
 	% generate FRET levels
-	FRET{n} = x{n} + randn(size(z{n})) .* theta{n}.sigma(z{n});
+	fret{n} = x{n} + randn(size(z{n})) ./ sqrt(theta{n}.Lambda(z{n}));
 end
 
 data = struct('fret', fret, ...
