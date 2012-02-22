@@ -166,7 +166,7 @@ function [w, L, stat] = vbem(x, w0, u, varargin)
 Debug = false;
 
 % parse inputs
-ip = InputParser();
+ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('x', @(x) isnumeric(x) & (ndims(x)==2));
 ip.addRequired('w0', @isstruct);

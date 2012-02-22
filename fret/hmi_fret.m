@@ -1,4 +1,4 @@
-function hmi_fret(save_name, data_files, K_values, restarts, varargin)
+function hmi_fret(save_name, x, K_values, restarts, varargin)
     % hmi_fret(save_name, data_files, K_values, restarts, varargin)
     %
     % Runs HMI inference on a set of FRET time series.
@@ -9,8 +9,8 @@ function hmi_fret(save_name, data_files, K_values, restarts, varargin)
     % save_name : string
     %   File name to save results to (without extension)
     %
-    % data_files : (1xD) cell
-    %   Set of file names to load FRET data from (see load_fret)
+    % x : (1xN) cell
+    %   Time series to perform inference on.
     %
     % K_values : (1xR)
     %   Number of states to use for each run
@@ -24,9 +24,6 @@ function hmi_fret(save_name, data_files, K_values, restarts, varargin)
     %
     % 'work_dir' : string 
     %   Working directory for algorithm
-    %
-    % 'load_fret' : struct
-    %   Any options to pass to load_fret function
     %
     % 'hmi' : struct
     %   Any options to pass to hmi algorithm
@@ -43,10 +40,10 @@ function hmi_fret(save_name, data_files, K_values, restarts, varargin)
     % Results are saved to 'save_name.mat'.
 
     % parse input
-    ip = InputParser();
+    ip = inputParser();
     ip.StructExpand = true;
     ip.addRequired('save_name', @isstr);
-    ip.addRequired('data_files', @(d) iscell(d) | isstr(d));
+    ip.addRequired('x', @iscell);
     ip.addRequired('K_values', @isnumeric);
     ip.addRequired('restarts', @isscalar);
     ip.addParamValue('work_dir', pwd(), @isstr);
@@ -79,18 +76,8 @@ function hmi_fret(save_name, data_files, K_values, restarts, varargin)
             opts.vbem.(fnames{f}) = opts_vbem.(fnames{f});
         end
     end
-    opts_load_fret = load_fret_defaults();
-    fnames = fieldnames(opts_load_fret);
-    for f = 1:length(fnames)
-        if ~isfield(opts.load_fret, fnames{f})
-            opts.load_fret.(fnames{f}) = opts_load_fret.(fnames{f});
-        end
-    end
 
     try
-        % load data
-        data = load_fret(data_files, opts.load_fret);
-
         % generate set of initial guesses for hyperparameters
         for k = 1:length(opts.K_values)
             K = opts.K_values(k);
@@ -112,7 +99,6 @@ function hmi_fret(save_name, data_files, K_values, restarts, varargin)
         end
 
         % run hmi for every set of hyperparameters
-        fret = cat(2, data.fret);
         runs = cell(length(opts.K_values), 1);
         parfor k = 1:length(opts.K_values)
             rn = cell(opts.restarts, 1);

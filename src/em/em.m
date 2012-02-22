@@ -83,7 +83,7 @@ function [theta, L, stat] = em(x, theta0, varargin)
 Debug = false;
 
 % parse inputs
-ip = InputParser();
+ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('x', @(x) isnumeric(x) & (ndims(x)==2));
 ip.addRequired('theta0', @isstruct);

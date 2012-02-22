@@ -57,7 +57,7 @@ function data = synth_data_fret(u, N, T, varargin)
 % $Revision: 1.2$  $Date: 2011/08/10$
 
 % parse inputs
-ip = InputParser();
+ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('u', @isstruct);
 ip.addRequired('N', @isscalar);

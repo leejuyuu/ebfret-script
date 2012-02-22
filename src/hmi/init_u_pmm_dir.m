@@ -47,7 +47,7 @@ function u = init_u_pmm_dir(M, vb, u, varargin)
     % $Revision: 1.0$  $Date: 2011/02/14$
 
     % parse inputs
-    ip = InputParser();
+    ip = inputParser();
     ip.StructExpand = true;
     ip.addRequired('M', @isscalar);
     ip.addRequired('vb', @isstruct);
