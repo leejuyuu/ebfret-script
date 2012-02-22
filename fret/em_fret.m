@@ -1,5 +1,5 @@
-function em_fret(save_name, data_files, K_values, restarts, varargin)
-    % em_fret(save_name, data_files, K_values, restarts, varargin)
+function em_fret(save_name, x, K_values, restarts, varargin)
+    % em_fret(save_name, x, K_values, restarts, varargin)
     %
     % Runs EM inference (maximum likelihood) on a set of FRET time series.
 	%
@@ -9,8 +9,8 @@ function em_fret(save_name, data_files, K_values, restarts, varargin)
 	% save_name : string
 	%	File name to save results to (without extension)
 	%
-	% data_files : (1xD) cell
-	%	Set of file names to load FRET data from (see load_fret)
+    % x : (1xN) cell
+    %   Time series to perform inference on.
 	%
 	% K_values : (1xR)
 	%	Number of states to use for each run
@@ -22,20 +22,14 @@ function em_fret(save_name, data_files, K_values, restarts, varargin)
 	% Variable Inputs
 	% ---------------
 	%
-	% 'work_dir' : string 
-	%	Working directory for algorithm
-	%
-	% 'load_fret' : struct
-	%	Any options to pass to load_fret function
-	%
-	% 'em' : struct
-	%	Any options to pass to em algorithm
+	% 'num_cpu' : int (default: 1)
+	% 	Number of cpu's to use
 	%
 	% 'display' : {'all', 'traces', 'states', 'off'}
 	%	Verbosity of progress messages
 	%
-	% 'num_cpu' : int (default: 1)
-	% 	Number of cpu's to use
+	% 'em' : struct
+	%	Any options to pass to em algorithm
 	%
 	% Outputs
 	% -------
@@ -46,16 +40,14 @@ function em_fret(save_name, data_files, K_values, restarts, varargin)
     ip = inputParser();
     ip.StructExpand = true;
     ip.addRequired('save_name', @isstr);
-	ip.addRequired('data_files', @(d) iscell(d) | isstr(d));
+    ip.addRequired('x', @iscell);
 	ip.addRequired('K_values', @isnumeric);
 	ip.addRequired('restarts', @isscalar);
-	ip.addParamValue('work_dir', pwd(), @isstr);
-	ip.addParamValue('load_fret', struct(), @isstruct);
 	ip.addParamValue('em', struct(), @isstruct);
     ip.addParamValue('display', 'off', ...
                       @(s) any(strcmpi(s, {'all', 'traces', 'states', 'none'})));
 	ip.addParamValue('num_cpu', 1, @isscalar);
-    ip.parse(save_name, data_files, K_values, restarts, varargin{:});
+    ip.parse(save_name, x, K_values, restarts, varargin{:});
     opts = ip.Results;
 
     % open matlabpool if using mutliple CPU's
@@ -71,19 +63,9 @@ function em_fret(save_name, data_files, K_values, restarts, varargin)
     		opts.em.(fnames{f}) = opts_em.(fnames{f});
     	end
     end
-    opts_load_fret = load_fret_defaults();
-    fnames = fieldnames(opts_load_fret);
-    for f = 1:length(fnames)
-    	if ~isfield(opts.load_fret, fnames{f})
-    		opts.load_fret.(fnames{f}) = opts_load_fret.(fnames{f});
-    	end
-    end
 
 	try
-		% load data
-		data = load_fret(opts.data_files, opts.load_fret)
-		fret = cat(2, data.fret);
-		N = length(fret);
+		N = length(x);
 		R = opts.restarts;
 
 		% ignore warning messages during gmm kmeans parameter init
@@ -107,10 +89,10 @@ function em_fret(save_name, data_files, K_values, restarts, varargin)
 						         K, n , N, r, R);
 					end
 					ml{n,r} = struct();
-					w0 = init_w_gmm(fret{n}, u);
+					w0 = init_w_gmm(x{n}, u);
 					ml{n,r}.theta0 = theta_map(w0);
 					[ml{n,r}.theta, ml{n,r}.L, ml{n,r}.stat] = ...
-						em(fret{n}, ml{n,r}.theta0, opts.em);
+						em(x{n}, ml{n,r}.theta0, opts.em);
 					% hack: set L to -inf if likelihood diverged
 					if any(ml{n,r}.stat.gamma ~= ml{n,r}.stat.gamma)
 						ml{n,r}.L(end) = -inf
@@ -128,7 +110,7 @@ function em_fret(save_name, data_files, K_values, restarts, varargin)
 			% get viterbi paths
 			vit = struct();
 			for n = 1:N
-				[vit(n).z vit(n).x] = viterbi_em(ml(n).theta, fret{n});
+				[vit(n).z vit(n).x] = viterbi_em(ml(n).theta, x{n});
 			end
 
 			% assign outputs

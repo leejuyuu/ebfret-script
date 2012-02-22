@@ -1,5 +1,5 @@
 function hmi_fret(save_name, x, K_values, restarts, varargin)
-    % hmi_fret(save_name, data_files, K_values, restarts, varargin)
+    % hmi_fret(save_name, x, K_values, restarts, varargin)
     %
     % Runs HMI inference on a set of FRET time series.
     %
@@ -22,17 +22,14 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
     % Variable Inputs
     % ---------------
     %
-    % 'work_dir' : string 
-    %   Working directory for algorithm
+    % 'num_cpu' : int (default: 1)
+    %   Number of cpu's to use
     %
     % 'hmi' : struct
     %   Any options to pass to hmi algorithm
     %
     % 'vbem' : struct
     %   Any options to pass to vbem algorithm
-    %
-    % 'num_cpu' : int (default: 1)
-    %   Number of cpu's to use
     %
     % Outputs
     % -------
@@ -46,14 +43,10 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
     ip.addRequired('x', @iscell);
     ip.addRequired('K_values', @isnumeric);
     ip.addRequired('restarts', @isscalar);
-    ip.addParamValue('work_dir', pwd(), @isstr);
-    ip.addParamValue('load_fret', struct(), @isstruct);
+    ip.addParamValue('num_cpu', 1, @isscalar);
     ip.addParamValue('hmi', struct(), @isstruct);
     ip.addParamValue('vbem', struct(), @isstruct);
-    ip.addParamValue('display', 'off', ...
-                      @(s) any(strcmpi(s, {'all', 'traces', 'states', 'none'})));
-    ip.addParamValue('num_cpu', 1, @isscalar);
-    ip.parse(save_name, data_files, K_values, restarts, varargin{:});
+    ip.parse(save_name, x, K_values, restarts, varargin{:});
     opts = ip.Results;
 
     % open matlabpool if using mutliple CPU's
@@ -105,7 +98,7 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
             for r = 1:opts.restarts
                 rn{r} = struct();
                 [rn{r}.u, rn{r}.L, rn{r}.vb, rn{r}.vit] = ...
-                    hmi(fret, u0(k,r), opts.hmi, 'vbem', opts.vbem);
+                    hmi(x, u0(k,r), opts.hmi, 'vbem', opts.vbem);
                 
                 rn{r}.K = opts.K_values(k);
                 rn{r}.u0 = u0(k, r);
@@ -126,7 +119,7 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
     
     catch ME
         % ok something went wrong here, so dump workspace to disk for inspection
-        day_time =  datestr(now, 'yymmdd-hh.MM');
+        day_time =  datestr(now, 'yymmdd-HH.MM');
         save_name = sprintf('%s-crashdump-%s.mat', opts.save_name, day_time);
         save(save_name);
 
