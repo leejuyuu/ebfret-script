@@ -15,7 +15,7 @@ function [I, H] = mi_xiz(xi, z)
     % Outputs
     % -------
     %
-	% I : The normalized mutual information between 
+	% I : The mutual information between 
 	%  	xi(t,k,l) and (z(t,k),z(t+1,l))
 	%
 	% H :  Normalization factor: joint entropy between
