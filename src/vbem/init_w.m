@@ -1,8 +1,8 @@
-function w0 = init_w(u, counts, varargin)
-% w0 = init_w(u, counts, varargin)
+function w = init_w(u, counts, varargin)
+% w = init_w(u, counts, varargin)
 %
 % Initializes a first guess for the variational parameters that 
-% specify the approximating distribution for the q(theta | w0).
+% specify the approximating distribution for the q(theta | w).
 %
 % This first guess is constructed by drawing a set of parameters 
 % theta = [pi, A, mu, lambda] from the priors:
@@ -56,9 +56,9 @@ function w0 = init_w(u, counts, varargin)
 % Outputs
 % -------
 %
-%   w0 : struct
+%   w : struct
 %       Initial guess for variational parameters of posterior
-%       distribution q(theta | w0). Contains same fields as u.
+%       distribution q(theta | w). Contains same fields as u.
 %
 % Jan-Willem van de Meent (modified from Jonathan Bronson)
 % $Revision: 1.00 $  $Date: 2011/08/03$
@@ -96,6 +96,10 @@ T = counts;
 % signal dimension (1 for FRET or 2 for Donor/Acceptor inference)
 D = size(u.W, 2);
 
+% this is necessary just so matlab does not complain about 
+% structs being dissimilar because of the order of the fields
+w = u;
+
 if randomize
 	% draw pi ~ Dir(u.pi) 
 	theta.pi = dirrnd(u.pi', 1)';
@@ -124,23 +128,31 @@ else
 end
 
 % add pi to prior with count 1
-w0.pi = u.pi + theta.pi;
+w.pi = u.pi + theta.pi;
 
 % add draw A ~ Dir(u.A) to prior with count (T-1)/K for each row  
-w0.A = u.A + theta.A .* (T-1) ./ K;
+w.A = u.A + theta.A .* (T-1) ./ K;
 
 % TODO: why did JonBron add 0.1 to every element here?
-% w0.ua(k, :) = u.ua(k, :) + dirrnd(u.ua(k, :) + 0.1, 1) .* (T-1) ./ K;
+% w.ua(k, :) = u.ua(k, :) + dirrnd(u.ua(k, :) + 0.1, 1) .* (T-1) ./ K;
 
 % add T/K counts to beta and nu
-w0.beta = u.beta + T/K;
-w0.nu = w0.beta + 1;
+w.beta = u.beta + T/K;
+w.nu = w.beta + 1;
 
 for k = 1:K
-    % w0.mu = (u.beta * u.mu + T/K * mu) / (u.beta + T/K)
-    w0.mu(k, :) = (u.beta(k) * u.mu(k, :) + T/K * theta.mu(k,:)) / w0.beta(k);;
+    % w.mu = (u.beta * u.mu + T/K * mu) / (u.beta + T/K)
+    w.mu(k, :) = (u.beta(k) * u.mu(k, :) + T/K * theta.mu(k,:)) / w.beta(k);;
 end
 
 % set W such that W nu = L 
 % TODO: this should be a proper update, but ok for now
-w0.W = bsxfun(@times, theta.L, 1 ./ w0.nu);
+w.W = bsxfun(@times, theta.L, 1 ./ w.nu);
+
+% this is grossly retarded, but apparently the only way to get the fields in order
+w.pi = w.pi;
+w.A = w.A;
+w.mu = w.mu;
+w.beta = w.beta;
+w.W = w.W;
+w.nu = w.nu;

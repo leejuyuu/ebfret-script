@@ -9,6 +9,10 @@ function w = m_step(u, x, g, xi)
     [K D] = size(u.mu);
     [T] = length(x);
 
+    % this is necessary just so matlab does not complain about 
+    % structs being dissimilar because of the order of the fields
+    w = u;
+
     % Update for pi
     %
     % w.pi(k) = u.pi(k) + g(1, k) 
