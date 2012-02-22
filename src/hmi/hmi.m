@@ -148,16 +148,19 @@ while ~converged
     if (it == 1) | strcmpi(args.do_restarts, 'always')
         R = args.restarts;
         for n = 1:N
-            % do not randomize first restart
 			if (it == 1)
-            	w0(n, 1) =  init_w(u0, length(data{n}), 'randomize', false);
+                for r = 1:R
+                   % use gmm to initialize posterior params
+            	   w0(n, r) =  init_w_gmm(u0, length(data{n}));
+                end
 			else
+                % do no randomize first restart
         		w0(n, 1) = w(it-1, n);
+                for r = 2:R
+                    % draw w0 from prior u for other restarts
+                    w0(n, r) = init_w(u(it), length(data{n}));
+                end
 			end
-       		% randomize guess w0 for other restarts
-            for r = 2:R
-                w0(n, r) = init_w(u0, length(data{n}));
-            end
         end
     else
         % only do one restart and use w from last iteration as guess
