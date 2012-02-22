@@ -108,11 +108,6 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
         runs = cat(1, runs{:});
         runs = reshape([runs{:}], [length(opts.K_values), opts.restarts]);
 
-        % keep only best restart for each number of states
-        L = arrayfun(@(rn) rn.L(end), runs);
-        [mx, idx] = max(L, [], 2);
-        runs = runs(:, idx);
-
         % save results to disk
         save_name = sprintf('%s.mat', opts.save_name);
         save(save_name, 'x', 'opts', 'runs');
