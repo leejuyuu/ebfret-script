@@ -132,7 +132,7 @@ function em_fret(save_name, x, K_values, restarts, varargin)
 	    end
 	catch ME
 		% ok something went wrong here, so dump workspace to disk for inspection
-		day_time = 	datestr(now, 'yymmdd-hh.MM');
+		day_time = 	datestr(now, 'yymmdd-HH.MM');
 		save_name = sprintf('%s-crashdump-%s.mat', opts.save_name, day_time);
 		save(save_name);
 
