@@ -28,4 +28,4 @@ function D_kl = kl_cat(p, q)
 % figure out summation dim
 d = ndims(p);
 d = d - (size(p, d) == 1);
-D_kl = sum(p * nan_to_zero(log(p ./ q)), d);
+D_kl = sum(p .* nan_to_zero(log(p ./ q)), d);
