@@ -11,16 +11,23 @@ function [data, raw] = load_fret(data_files, varargin)
 % ------
 %
 % data_files (1xD cell)
-%   Names of datasets to analyse (e.g. {'file1.dat' 'file2.dat'}). 
-%   Datasets are T x 2N, with the donor signal on odd columns
-%   and acceptor signal on even columns.
+%   Names of datasets to analyse (e.g. {'file1.dat' 'file2.dat'}).
+%   Datasets may have one of two possible formats.
 %
-%   TODO: Modify this function to deal with other inputs
-%   (e.g. vbFRET saved sessions)
-%   
+%   dat : (Tx2N numeric)
+%       dat is formatted as a matrix with donor signals on odd columns
+%       and acceptor signals on even colums
+%
+%   dat : (Nx1 cell)
+%       Each trace dat{n} is a T(n)x2 matrix with donor on the first
+%       and acceptor on the second column.
 %
 % Variable Inputs
 % ---------------
+%
+% 'variable' (string, default:empty)
+%   If specified, assume data is saved as a matlab file,
+%   with data stored under the specified variable name.
 %
 % 'has_labels' (boolean, default:false)
 %   Assume first row contains trace labels
@@ -85,6 +92,7 @@ function [data, raw] = load_fret(data_files, varargin)
 ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data_files', @(d) iscell(d) | isstr(d));
+ip.addParamValue('variable', '', @isstr);
 ip.addParamValue('has_labels', true, @isscalar);
 ip.addParamValue('remove_bleaching', false, @isscalar);
 ip.addParamValue('min_length', 1, @isscalar);
@@ -109,23 +117,42 @@ for d = 1:length(data_files)
     end
 
     % load dataset
-    dat = load(data_files{d});
-    
-    % strip labels if necessary
-    if args.has_labels
-        labels = num2cell(dat(1, 1:2:end));
-        dat = dat(2:end, :);
+    if isempty(args.variable)
+        dat = load(data_files{d});
     else
-        labels = num2cell(1:length(dat(1, 1:2:end)));
+        dat = load(data_files{d}, args.variable);
+        dat = dat.(args.variable);
     end
 
-    % strip first point (often bad data)
-    if args.strip_first
-        dat = dat(2:end, :);
+    % check if data is in matrix format
+    if isnumeric(dat)
+        % convert data into cell array
+        raw_data = mat2cell(dat, size(dat,1), 2 * ones(size(dat,2) / 2, 1));
+    else
+        % assume a cell array with dat{n} = [donor, acceptor]
+        raw_data = dat;
     end
 
-    % convert data into cell array
-    raw_data = mat2cell(dat, size(dat,1), 2 * ones(size(dat,2) / 2, 1));
+    for n = 1:length(raw_data)
+        % get trace
+        rw = raw_data{n};
+
+        % strip labels if necessary
+        if args.has_labels
+            labels{n} = rw(1, 1);
+            rw = rw(2:end, :);
+        else
+            labels{n} = n;
+        end
+
+        % strip first point (often bad data)
+        if args.strip_first
+            rw = rw(2:end, :);
+        end
+
+        % store trace again
+        raw_data{n} = rw;
+    end
 
     % store raw data in output
     raw(d).donor = cellfun(@(rd) rd(:,1), raw_data, 'UniformOutput', false);
