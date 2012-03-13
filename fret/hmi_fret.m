@@ -10,13 +10,13 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
     %   File name to save results to (without extension)
     %
     % x : (1xN) cell
-    %   Time series to perform inference on.
+    %   Time series to perform inference on
     %
     % K_values : (1xR)
     %   Number of states to use for each run
     %
     % restarts : int
-    %   Number of VBEM restarts to perform for each trace
+    %   Number of HMI restarts to perform
     %
     %
     % Variable Inputs
@@ -34,7 +34,7 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
     % Outputs
     % -------
     % 
-    % Results are saved to 'save_name.mat'.
+    % Results are saved to 'save_name.mat'
 
     % parse input
     ip = inputParser();
