@@ -99,7 +99,7 @@ function u = init_u_pmm_dir(M, vb, u, varargin)
         % choosing the prior strength can be a little finicky,
         % so try orders of magnitude until something converges
         for u_strength = [1, 0.1, 10, 0.01, 100]
-            [u_A g L exitflag] = pmm_dir(Xi, u_strength * u_A0, ones(m, 1));
+            [u_A g L exitflag] = pmm_dir(Xi, u_strength * u_A0, ones(M, 1));
             if exitflag == 1
                 break
             end
