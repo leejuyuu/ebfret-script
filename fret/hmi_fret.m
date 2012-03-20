@@ -1,13 +1,10 @@
-function hmi_fret(save_name, x, K_values, restarts, varargin)
+function runs = hmi_fret(x, K_values, restarts, varargin)
     % hmi_fret(save_name, x, K_values, restarts, varargin)
     %
     % Runs HMI inference on a set of FRET time series.
     %
     % Inputs
     % ------
-    %
-    % save_name : string
-    %   File name to save results to (without extension)
     %
     % x : (1xN) cell
     %   Time series to perform inference on
@@ -31,22 +28,41 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
     % 'vbem' : struct
     %   Any options to pass to vbem algorithm
     %
+    %
     % Outputs
     % -------
     % 
-    % Results are saved to 'save_name.mat'
+    % runs : (1xR) struct
+    %   Output of hmi run for each K value (see hmi.m)
+    %
+    %   .u struct
+    %       Hyperparameters for ensemble distribution
+    %   
+    %   .L (1xI)
+    %       Summed evidence for each hierarchical iteration
+    %
+    %   .vb (1xN) struct    
+    %       VBEM output for each trace
+    %
+    %   .vit (1xN) struct
+    %       Viterbi path for each trace
+    %
+    %   .K int
+    %       Number of states
+    %
+    %   .u0 struct
+    %       Initial guess for hyperparameters
 
     % parse input
     ip = inputParser();
     ip.StructExpand = true;
-    ip.addRequired('save_name', @isstr);
     ip.addRequired('x', @iscell);
     ip.addRequired('K_values', @isnumeric);
     ip.addRequired('restarts', @isscalar);
     ip.addParamValue('num_cpu', 1, @isscalar);
     ip.addParamValue('hmi', struct(), @isstruct);
     ip.addParamValue('vbem', struct(), @isstruct);
-    ip.parse(save_name, x, K_values, restarts, varargin{:});
+    ip.parse(x, K_values, restarts, varargin{:});
     opts = ip.Results;
 
     % open matlabpool if using mutliple CPU's
@@ -107,15 +123,10 @@ function hmi_fret(save_name, x, K_values, restarts, varargin)
         end
         runs = cat(1, runs{:});
         runs = reshape([runs{:}], [length(opts.K_values), opts.restarts]);
-
-        % save results to disk
-        save_name = sprintf('%s.mat', opts.save_name);
-        save(save_name, 'x', 'opts', 'runs');
-    
     catch ME
         % ok something went wrong here, so dump workspace to disk for inspection
         day_time =  datestr(now, 'yymmdd-HH.MM');
-        save_name = sprintf('%s-crashdump-%s.mat', opts.save_name, day_time);
+        save_name = sprintf('crashdump-hmi_fret-%s.mat', day_time);
         save(save_name);
 
         % close matlabpool if necessary
