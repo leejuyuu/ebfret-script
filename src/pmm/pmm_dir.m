@@ -73,23 +73,24 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
         
 		% E-step: calculate responsibilities
 
-		% calculate p(w(n,:) | u(k,:), z=k)
+		% calculate log of p(w(n,:) | u(k,:), z=k) = Beta(w) / Beta(u)
 		w_new = bsxfun(@plus, reshape(Xi, [N 1 E D]), ...
 		                      reshape(u_new, [1 K E D]));
 		log_Bw = sum(gammaln(w_new), 4) - gammaln(sum(w_new, 4));
 		log_Bu = sum(gammaln(u_new), 3) - gammaln(sum(u_new, 3));
 		log_pw_uz = sum(bsxfun(@minus, reshape(log_Bw, [N K E]), ... 
 		                               reshape(log_Bu, [1 K E])), 3);
-		pw_uz = exp(log_pw_uz);
 
-		% calculate p(w(n,:), z=k | u(k,:))
-		pwz_u = bsxfun(@times, pw_uz, p_new');
-
-		% calculate gamma(n, k) = p(zeta(n)=k | w(n, :), u)
-		g_new = bsxfun(@rdivide, pwz_u, sum(pwz_u, 2)); 
+		% calculate gamma(n, k) = p(z(n)=k | w(n, :), u)
+		% to avoid underflow, we renormalize the probabilities 
+		% by their mean value across k for each n
+		log_pw_uz0 = bsxfun(@minus, log_pw_uz, mean(log_pw_uz, 2));
+		pw_uz0 = exp(log_pw_uz0);
+		pwz_u0 = bsxfun(@times, pw_uz0, p_new');
+		g_new = bsxfun(@rdivide, pwz_u0, sum(pwz_u0, 2)); 
 
 		% Check whether log likelihood increased
-		L_new = sum(log(sum(pwz_u, 2)));
+		L_new = sum(sum(g_new .* log_pw_uz, 2));
 		if L_new > L(it)
 			L(it+1) = L_new;
 			u = u_new;
