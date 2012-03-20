@@ -65,7 +65,7 @@ function w = init_w_gmm(x, u, varargin)
                                  'CovType', 'diagonal', 'Regularize', 1e-6, 'Options', gmm_opts);
     end
 
-    % get emission modelparameters
+    % get emission model parameters
     [mu, kdxs] = sort(gmm.mu);
     lambda = 1 ./ gmm.Sigma(kdxs);
     p = gmm.PComponents(kdxs);
