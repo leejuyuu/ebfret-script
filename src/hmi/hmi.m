@@ -154,7 +154,7 @@ while ~converged
             	   w0(n, r) =  init_w_gmm(data{n}, u0);
                 end
 			else
-                % do no randomize first restart
+                % do not randomize first restart
         		w0(n, 1) = w(it-1, n);
                 for r = 2:R
                     % draw w0 from prior u for other restarts
