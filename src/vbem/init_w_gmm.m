@@ -26,6 +26,9 @@ function w = init_w_gmm(x, u, varargin)
     % threshold : float (default: 1e-5)
     %   Tolerance when running gmdistribution.fit
     %
+    % quiet : boolean (default: true)
+    %   Suppress gmdistribution.fit convergence warnings
+    %
     % Outputs
     % -------
     %
@@ -42,6 +45,7 @@ function w = init_w_gmm(x, u, varargin)
     ip.addRequired('u', @isstruct);
     ip.addParamValue('hard_kmeans', false, @isscalar);
     ip.addParamValue('threshold', 1e-5, @isscalar);
+    ip.addParamValue('quiet', true, @isscalar);
     ip.parse(x, u, varargin{:});
     args = ip.Results;
     x = args.x;
@@ -53,6 +57,11 @@ function w = init_w_gmm(x, u, varargin)
     % structs being dissimilar because of the order of the fields
     w = u;
 
+    % silence convergence warnings
+    if args.quiet
+        warn = warning('off', 'stats:gmdistribution:FailedToConverge');
+    end
+    
     gmm_opts.TolFun = args.threshold;
     if args.hard_kmeans
         % run hard kmeans to get cluster centres
@@ -63,6 +72,11 @@ function w = init_w_gmm(x, u, varargin)
     else
         gmm = gmdistribution.fit(x, K, ...
                                  'CovType', 'diagonal', 'Regularize', 1e-6, 'Options', gmm_opts);
+    end
+
+    % unsilence convergence warnings
+    if args.quiet
+        warning(warn);
     end
 
     % get emission model parameters
