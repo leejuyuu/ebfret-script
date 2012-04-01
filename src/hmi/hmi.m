@@ -52,10 +52,6 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 % Variable Inputs
 % ---------------
 %
-%   hstep : 'ml', 'mm'   
-%     Method to use for hierarchical updates of hyperparameters
-%     'ml' for maximum likelihood, 'mm' for method of moments.
-%
 %   restarts : int
 %     Number of VBEM restarts to perform for each trace.
 %
@@ -117,8 +113,6 @@ ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);
-ip.addParamValue('hstep', 'ml', ...
-                  @(s) any(strcmpi(s, {'ml', 'mm'})));
 ip.addParamValue('restarts', 10, @isscalar);
 ip.addParamValue('do_restarts', 'init', ...
                   @(s) any(strcmpi(s, {'always', 'init'})));
@@ -181,7 +175,7 @@ while ~converged
             if L_(end) > L{it, n}(end)
                 w(it, n) = w_;
                 L{it, n} = L_;
-                stat(it, n) = stat_;
+                %stat(it, n) = stat_;
             end
         end
     end
@@ -204,11 +198,7 @@ while ~converged
     end
 
     % run hierarchical updates
-    if strcmp(args.hstep, 'ml')
-      u(it+1) = hstep_ml(w(it,:), u(it));
-    else
-      u(it+1) = hstep_mm(w(it,:), u(it), stat(it,:));
-    end
+    u(it+1) = hstep_ml(w(it,:), u(it));
 
     % proceed with next iteration
     it = it + 1;
@@ -217,8 +207,7 @@ end
 % place vbem output in struct 
 for n = 1:N
     vb(n) = struct('w', w(it,n), ...
-                   'L', L{it,n}(end), ...
-                   'stat', stat(it,n));
+                   'L', L{it,n}(end))
 end
 
 % calculate viterbi paths
