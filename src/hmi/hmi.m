@@ -1,5 +1,5 @@
-function [u, L, vb, vit] = hmi(data, u0, varargin)
-% [u, L, vb, vit] = hmi(data, u0)
+function [u, L, vb, vit, omega] = hmi(data, u0, w0, varargin)
+% [u, L, vb, vit, omega] = hmi(data, u0)
 %
 % Runs a hierarchical inference process on a collection of single 
 % molecule FRET time series (or traces) using a Hidden Markov Model.
@@ -28,8 +28,8 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %     Time series data on which inference is to be performed.
 %     Each data{n} should be a 1d vector of time points.
 %   
-%   u0 : struct 
-%     Initial guess for hyperparameters of the ensemble distribution
+%   u0 : (M x 1) struct 
+%     Initial guesses for hyperparameters of the ensemble distribution
 %     p(theta | u) over the model parameters.
 %
 %     .A : (K x K)
@@ -48,6 +48,9 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %
 %     Note: The current implementation only supports D=1 signals
 %
+%   w0 : (N x M) or (N x 1) struct (optional)
+%     Intial guesses for variational parameters. 
+%    
 %
 % Variable Inputs
 % ---------------
@@ -79,14 +82,14 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 % Outputs
 % -------
 %
-%   u : struct
+%   u : (M x 1) struct
 %     Optimized hyperparameters (same fields as u0)
 %
 %   L : (I x 1) 
 %     Total lower bound summed over all traces for each 
 %     HMI iteration 
 %
-%   vb : (N x 1) struct
+%   vb : (N x M) struct
 %     Output of VBEM algorithm for each trace
 %
 %     .w : struct
@@ -100,8 +103,19 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %
 %     .x : (T x 1)
 %         FRET level of viterbi path for every time point
+%     .y : int
+%         Mixture component for trace
 %     .z : (T x 1)
 %         State index of viterbi path for every time point
+%
+%
+%   omega : struct
+%     Mixture parameters for priors
+%
+%     .gamma : (N x M)
+%         Responsibilities for each trace and mixture component
+%     .pi : (M x 1)
+%         Mixture component prior weights 
 %
 % Jan-Willem van de Meent
 % $Revision: 1.0$  $Date: 2011/08/04$
@@ -111,6 +125,7 @@ ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);
+ip.addOptional('w0', struct(), @isstruct);
 ip.addParamValue('restarts', 10, @isscalar);
 ip.addParamValue('do_restarts', 'init', ...
                   @(s) any(strcmpi(s, {'always', 'init'})));
@@ -120,7 +135,7 @@ ip.addParamValue('boolean', true, @isscalar);
 ip.addParamValue('display', 'off', ...
                   @(s) any(strcmpi(s, {'hstep', 'trace', 'off'})));
 ip.addParamValue('vbem', struct(), @isstruct);
-ip.parse(data, u0, varargin{:});
+ip.parse(data, u0, w0, varargin{:});
 
 % collect inputs
 args = ip.Results;
@@ -129,74 +144,107 @@ u0 = args.u0;
 
 % get dimensions
 N = length(data);
-K = length(u0.pi);
+M = length(u0);
+K = length(u0(1).pi);
 
 converged = false;
 it = 1;
-u(it) = u0;
+u(it, :) = u0;
+clear w0;
+
 % main loop for hierarchical inference process
+omega.pi = ones(M,1) ./ M;
 while ~converged
     % initialize guesses for w    
     if (it == 1) | strcmpi(args.do_restarts, 'always')
         R = args.restarts;
-        for n = 1:N
-			if (it == 1)
-                for r = 1:R
-                   % use gmm to initialize posterior params
-            	   w0(n, r) =  init_w_gmm(data{n}, u0);
-                end
-			else
-                % do not randomize first restart
-        		w0(n, 1) = w(it-1, n);
-                for r = 2:R
+        % on first iteration, initial values for w are either 
+        % supplied as arguments, or inferred by running a gaussian
+        % mixture model on the data
+        %
+        % on subsequent iterations, the result from the previous
+        % iteration is used in the fist restart
+        if (it == 1)
+            switch length(args.w0(:))
+                case N*M
+                    [w0(:, :, 1)] =  args.w0;
+                case N
+                    for m = 1:M
+                        [w0(:, m, 1)] =  args.w0(:);
+                    end
+                otherwise
+                    for n = 1:N
+                        for m = 1:M 
+                            w0(n, m, 1) =  init_w_gmm(data{n}, u0(m));
+                        end
+                    end
+            end
+        else
+            % use value from previous iteration
+            w0(n, m, 1) = w(it-1, n, m);
+        end
+
+        % additional restarts use a randomized guess for the
+        % prior parameters
+        for r = 2:R
+            for n = 1:N
+                for m = 1:M
                     % draw w0 from prior u for other restarts
-                    w0(n, r) = init_w(u(it), length(data{n}));
+                    w0(n, m, r) = init_w(u(it, m), length(data{n}));
                 end
-			end
+            end
         end
     else
         % only do one restart and use w from last iteration as guess
         R = 1;
-        w0(:, 1) = w(it-1, :);
+        w0(:, :, 1) = w(it-1, :, :);
     end
 
     % run vbem on each trace 
+    L(it,:,:) = -Inf * ones(N, M);
     for n = 1:N
         if strcmpi(args.display, 'trace')
             fprintf('hmi: %d states, it %d, trace %d of %d\n', K, it, n, N);
         end 
-        L{it,n} = [-Inf];
-        % loop over restarts
-        for r = 1:R
-            [w_, L_, stat_] = vbem(data{n}, w0(n,r), u(it), args.vbem);
-            % keep result if L better than previous restarts
-            if L_(end) > L{it, n}(end)
-                w(it, n) = w_;
-                L{it, n} = L_;
-                %stat(it, n) = stat_;
+        % loop over prior mixture components
+        for m = 1:M
+            % loop over restarts
+            for r = 1:R
+                [w_, L_, stat_] = vbem(data{n}, w0(n, m, r), u(it, m), args.vbem);
+                % keep result if L better than previous restarts
+                if L_(end) > L(it, n, m)
+                    w(it, n, m) = w_;
+                    L(it, n, m) = L_(end);
+                end
             end
         end
     end
 
+    % calculate prior mixture responsiblities for each trace
+    Lit = squeeze(L(it, :, :));
+    L0 = bsxfun(@minus, Lit , mean(Lit, 2));
+    omega(it).gamma = normalize(bsxfun(@times, exp(L0), omega(it).pi'), 2);
+    omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
+
     % calculate summed evidence
-    sL(it) = sum(cellfun(@(l) l(end), {L{it,:}}));
+    sL(it) = sum(sum(normalize(omega(it).gamma, 1) .* Lit, 2), 1);
 
     if strcmpi(args.display, 'hstep')
         fprintf('hmi: %d, L: %e, rel increase: %.2e\n', it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it));
     end    
 
     % check for convergence
-    if it > 1
-        if (sL(it) - sL(it-1)) < args.threshold * abs(sL(it-1)) | it > args.max_iter
-            if sL(it) < sL(it-1)
-              it = it-1;
-            end
-            break;
+    if (it > 1) & ((sL(it) - sL(it-1)) < args.threshold * abs(sL(it-1)) | it > args.max_iter)
+        if sL(it) < sL(it-1)
+          it = it-1;
         end
+        break;
     end
 
     % run hierarchical updates
-    u(it+1) = hstep_ml(w(it,:), u(it));
+    for m = 1:M
+        u(it+1, m) = hstep_ml(w(it, :, m), u(it, m), omega(it).gamma(:, m));
+    end
 
     % proceed with next iteration
     it = it + 1;
@@ -204,14 +252,20 @@ end
 
 % place vbem output in struct 
 for n = 1:N
-    vb(n) = struct('w', w(it,n), ...
-                   'L', L{it,n}(end))
+    for m = 1:M
+        vb(n,m) = struct('w', w(it,n,m), ...
+                         'L', L(it,n,m));
+    end
 end
 
 % calculate viterbi paths
 for n = 1:N
-    [vit(n).z, vit(n).x] = viterbi_vb(w(it,n), data{n});
+    m = find(bsxfun(@eq, L(it,n,:), max(L(it,n,:))));
+    [vit(n).z, vit(n).x] = viterbi_vb(w(it,n,m), data{n});
+    vit(n).y = m; 
 end 
 
+% assign outputs
 L = sL(1:it);
-u = u(it);
+u = u(it,:);
+omega = omega(it);
