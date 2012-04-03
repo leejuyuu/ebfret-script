@@ -1,4 +1,4 @@
-function u_new = hstep_ml(w, u)
+function u_new = hstep_ml(w, u, weights)
 % u_new = hstep_ml(w, u, varargin) 
 %
 % Hyper parameter updates for Hierarchical Model Inference (HMI)
@@ -47,6 +47,10 @@ function u_new = hstep_ml(w, u)
 %   u : struct 
 %       Hyperparameters for the prior distribution p(theta | u)
 %       (same fields as w)
+%
+%   weights : (N x 1) optional
+%       Weighting for each trace in updates.
+%
 %
 % Outputs
 % -------
@@ -116,19 +120,14 @@ EPS = 10 * eps;
 % set optimization settings
 opts = optimset('display', 'off', 'tolX', threshold, 'tolFun', eps);
 
-% % get weights for updates
-% if WeighTraces
-%   % weigh by evidence of each trace
-%   weights = normalize(cellfun(@(o) o.F(end), out));
-% else
-%   weights = ones(N,1) / N;
-% end
-
-% future proofing: allow weighting of traces. since this is a bit of
-% a cludge, we've disabled it for now
-for n = 1:N
-  w(n).wt = 1;
+% initialize dummy weights if not specified
+if nargin < 3
+    weights = ones(N,1);
 end
+
+% assign weights to w
+w0 = num2cell(bsxfun(@rdivide, weights, sum(weights)));
+[w(:).wt] = deal(w0{:});
 
 % initialize struct for updated params
 u_old = u;
@@ -136,12 +135,12 @@ u_old = u;
 % (mu, lambda) ~ Normal-Gamma
 % Expectation Value eta1: E[lambda] = w.nu * w.W
 E_l = arrayfun(@(w) w.nu .* w.W .* w.wt, w, 'UniformOutput', false);
-E_l = mean([E_l{:}], 2);
+E_l = sum([E_l{:}], 2);
 
 % (mu, lambda)
 % Expectation Value eta2: E[mu * lambda] = w.nu * w.W * w.mu
 E_ml = arrayfun(@(w) w.nu .* w.W .* w.mu .* w.wt, w, 'UniformOutput', false);
-E_ml = mean([E_ml{:}], 2);
+E_ml = sum([E_ml{:}], 2);
 
 % (mu, lambda): For expectation values of E[log g] we use 
 %
@@ -162,7 +161,7 @@ E_log_g = arrayfun(@(w) -0.5 * w.wt .* (1 ./ w.beta ...
                                + log(pi ./ w.W) ...
                                - psi(w.nu/2)), ...
                    w, 'UniformOutput', false);
-E_log_g = mean([E_log_g{:}], 2);
+E_log_g = sum([E_log_g{:}], 2);
 
 % (mu, lambda): Solve for u.nu
 %
@@ -194,7 +193,7 @@ u.W  = E_l ./ u.nu;
 %           = - psi(Sum w.pi) + psi(w.pi)
 E_log_wpi = arrayfun(@(w) psi(w.pi + eps) - psi(sum(w.pi + eps)), ...
                     w, 'UniformOutput', false);
-E_log_wpi = mean([E_log_wpi{:}], 2);
+E_log_wpi = sum([E_log_wpi{:}], 2);
 w_pi = exp(E_log_wpi);
 
 %(pi): solve system of equations
@@ -219,7 +218,7 @@ end
 % E[log A(k,:)]: Same as E[log pi]
 E_log_wA = arrayfun(@(w) w.wt * bsxfun(@plus, psi(w.A + EPS), -psi(sum(w.A + EPS, 2))), ...
                     w, 'UniformOutput', false);
-E_log_wA = mean(cat(3, E_log_wA{:}), 3);
+E_log_wA = sum(cat(3, E_log_wA{:}), 3);
 w_A = exp(E_log_wA);
 
 %A(k,:): solve system of equations
