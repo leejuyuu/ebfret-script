@@ -94,8 +94,6 @@ function [u, L, vb, vit] = hmi(data, u0, varargin)
 %         (same fields as u)
 %     .L : float
 %         Lower bound for evidence
-%     .stat : struct
-%         Expectation values under q(z) (see vbem documentation)
 %
 %   vit : (N x 1) struct
 %     Viterbi paths for each trace
