@@ -234,7 +234,7 @@ while ~converged
     end    
 
     % check for convergence
-    if (it > 1) & ((sL(it) - sL(it-1)) < args.threshold * abs(sL(it-1)) | it > args.max_iter)
+    if (it > 1) & abs((sL(it) - sL(it-1)) < args.threshold * abs(sL(it-1)) | it > args.max_iter)
         if sL(it) < sL(it-1)
           it = it-1;
         end
