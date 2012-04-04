@@ -227,7 +227,7 @@ while ~converged
     omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
 
     % calculate summed evidence
-    sL(it) = sum(sum(normalize(omega(it).gamma, 1) .* Lit, 2), 1);
+    sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
 
     if strcmpi(args.display, 'hstep')
         fprintf('hmi: %d, L: %e, rel increase: %.2e\n', it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it));
