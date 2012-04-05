@@ -125,7 +125,7 @@ ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);
-ip.addOptional('w0', struct(), @isstruct);
+ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'mu'));
 ip.addParamValue('restarts', 10, @isscalar);
 ip.addParamValue('do_restarts', 'init', ...
                   @(s) any(strcmpi(s, {'always', 'init'})));
@@ -152,6 +152,8 @@ it = 1;
 u(it, :) = u0;
 clear w0;
 
+args.display
+
 % main loop for hierarchical inference process
 omega.pi = ones(M,1) ./ M;
 while ~converged
@@ -164,6 +166,9 @@ while ~converged
         %
         % on subsequent iterations, the result from the previous
         % iteration is used in the fist restart
+        if (it == 1) & (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
+            fprintf('hmi: %d states, it %d, init\n', K, 0)
+        end
         if (it == 1)
             switch length(args.w0(:))
                 case N*M
@@ -174,6 +179,9 @@ while ~converged
                     end
                 otherwise
                     for n = 1:N
+                        if strcmpi(args.display, 'trace')
+                            fprintf('hmi: %d states, it %d, trace %d of %d\n', K, 0, n, N);
+                        end    
                         for m = 1:M 
                             w0(n, m, 1) =  init_w_gmm(data{n}, u0(m));
                         end
@@ -229,7 +237,7 @@ while ~converged
     % calculate summed evidence
     sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
 
-    if strcmpi(args.display, 'hstep')
+    if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
         fprintf('hmi: %d, L: %e, rel increase: %.2e\n', it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it));
     end    
 
