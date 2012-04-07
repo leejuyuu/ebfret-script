@@ -76,7 +76,11 @@ function w = init_w(x, u, varargin)
     % refine centers using hard kmeans
     if args.hard_kmeans
         % run hard kmeans to get cluster centres
-        [idxs mu] = kmeans(x, K, 'Start', theta0.mu);
+        if K > 1
+            [idxs mu] = kmeans(x, K, 'Start', theta0.mu);
+        else
+            idxs = ones(length(x), 1);
+        end
         % estimate weight, mean and std dev
         for k = 1:K
             msk = (idxs == k);
@@ -94,26 +98,31 @@ function w = init_w(x, u, varargin)
     
     % refine centers using a gaussian mixture model (soft kmeans)
     if args.soft_kmeans
-        % specify initial parameter values as gmdistribution struct
-        gmm0.PComponents = theta0.pi(:)';
-        gmm0.mu = theta0.mu;
-        gmm0.Sigma = theta0.Sigma;        
+        if K > 1
+            % specify initial parameter values as gmdistribution struct
+            gmm0.PComponents = theta0.pi(:)';
+            gmm0.mu = theta0.mu;
+            gmm0.Sigma = theta0.Sigma;        
 
-        % silence convergence warnings
-        if args.quiet
-            warn = warning('off', 'stats:gmdistribution:FailedToConverge');
+            % silence convergence warnings
+            if args.quiet
+                warn = warning('off', 'stats:gmdistribution:FailedToConverge');
+            end
+        
+            % run soft kmeans
+            gmm = gmdistribution.fit(x, K, 'Start', gmm0, ...
+                                     'CovType', 'diagonal', 'Regularize', 1e-6, ...
+                                     'Options', struct('Tolerance', args.threshold));
+
+            % unsilence convergence warnings
+            if args.quiet
+                warning(warn);
+            end
+        else
+            gmm = gmdistribution.fit(x, 1, 'Regularize', 1e-6, ...
+                                     'Options', struct('Tolerance', args.threshold));
         end
-    
-        % run soft kmeans
-        gmm = gmdistribution.fit(x, K, 'Start', gmm0, ...
-                                 'CovType', 'diagonal', 'Regularize', 1e-6, ...
-                                 'Options', struct('Tolerance', args.threshold));
-
-        % unsilence convergence warnings
-        if args.quiet
-            warning(warn);
-        end
-
+            
         theta0.pi = gmm.PComponents(:);
         theta0.mu = gmm.mu;
         theta0.Sigma = gmm.Sigma;                  
