@@ -126,7 +126,7 @@ if nargin < 3
 end
 
 % assign weights to w
-w0 = num2cell(bsxfun(@rdivide, weights, sum(weights)));
+w0 = num2cell(bsxfun(@rdivide, weights, sum(weights, 1)));
 [w(:).wt] = deal(w0{:});
 
 % initialize struct for updated params
@@ -191,7 +191,7 @@ u.W  = E_l ./ u.nu;
 %
 % E[log pi] = - (Grad_nu' f(nu', chi')) / f
 %           = - psi(Sum w.pi) + psi(w.pi)
-E_log_wpi = arrayfun(@(w) psi(w.pi + eps) - psi(sum(w.pi + eps)), ...
+E_log_wpi = arrayfun(@(w) w.wt * (psi(w.pi + eps) - psi(sum(w.pi + eps))), ...
                     w, 'UniformOutput', false);
 E_log_wpi = sum([E_log_wpi{:}], 2);
 w_pi = exp(E_log_wpi);
