@@ -1,158 +1,157 @@
-function w = init_w(u, counts, varargin)
-% w = init_w(u, counts, varargin)
-%
-% Initializes a first guess for the variational parameters that 
-% specify the approximating distribution for the q(theta | w).
-%
-% This first guess is constructed by drawing a set of parameters 
-% theta = [pi, A, mu, lambda] from the priors:
-%
-%   pi ~ Dir(u.pi)
-%   A ~ Dir(u.A)
-%   mu, lambda ~ Gaussian-Wishart(u.mu, u.beta, u.W, u.nu)
-%
-% These parameters are then used to update the u, weighted by
-% the specified number of pseudocounts. The initial guess is 
-% therefore analogous to the posterior after observation of a
-% time series with length T=counts and parameters theta. 
-%
-% Counts are distributed evenly between states.
-%
-%
-% Inputs
-% ------
-%
-%   u : struct
-%       Hyperparameters for prior distribution p(theta | u)
-%
-%       .A (KxK)
-%           Dirichlet prior for each row of transition matrix
-%       .pi (Kx1)
-%           Dirichlet prior for initial state probabilities
-%       .mu (KxD)
-%           Gaussian-Wishart posterior for state means 
-%       .beta (Kx1)
-%           Gaussian-Wishart posterior for state occupation count
-%       .W (KxDxD)
-%           Gaussian-Wishart posterior for state precisions
-%       .nu (Kx1)
-%           Gaussian-Wishart posterior for degrees of freedom
-%           (must be equal to beta+1)
-%
-%   counts : integer
-%       Number of pseudocounts to use for randomization. 
-%		This should be equal to the number of time points
-%       in the FRET series on which inference is performed.
-%
-% Variable Inputs
-% ---------------
-%
-% 	randomize : boolean (default true)
-%		If set to true, a set of random parameters is drawn from the 
-%       prior and use to generate the pseudocounts. If set to false,
-%		the pseudocounts are obtained using the expectation values of
-% 		theta under the prior.
-%
-% Outputs
-% -------
-%
-%   w : struct
-%       Initial guess for variational parameters of posterior
-%       distribution q(theta | w). Contains same fields as u.
-%
-% Jan-Willem van de Meent (modified from Jonathan Bronson)
-% $Revision: 1.00 $  $Date: 2011/08/03$
+function w = init_w(x, u, varargin)
+	% w = init_w(x, u, varargin)
+	%
+    % Initialization of the posterior parameters w for a trace
+    % with datapoints x. Parameters are drawn from the prior and
+    % optionally refined using hard and/or soft kmeans estimation.
+    %
+    % Inputs
+    % ------
+    % 
+    % x : (T x D)
+    %   Signal to learn posterior from.
+    %
+    % u : struct
+    %   Hyperparameters for VBEM/HMI algorithm
+    %
+    %
+    % Variable Inputs
+    % ---------------
+    %
+    % hard_kmeans : boolean (default: false)
+    %   Run hard kmeans algorithm 
+    %
+    % soft_kmeans : boolean (default: false)
+    %   Run soft kmeans (gmdistribution.fit)
+    %
+    % threshold : float (default: 1e-5)
+    %   Tolerance when running gmdistribution.fit
+    %
+    % quiet : boolean (default: true)
+    %   Suppress gmdistribution.fit convergence warnings
+    %
+    %
+    % Outputs
+    % -------
+    %
+    % u : struct
+    %   Hyperparameters with sampled state means
+    %
+    % Jan-Willem van de Meent
+    % $Revision: 1.0$  $Date: 2011/02/14$
 
-% References
-% ----------
-%
-%   [Bishop] equations 10.60-1.63
-%   [Beal] equations 3.54 and 3.56
-%
-% 
-% TODO
-% ---- 
-%  * Work around use of mvnrnd (needs statistics toolbox)
-%  * When u.pi and u.A are not uniform, counts should not be evenly
-%    distributed among states.
-%  * W update is not weighted correctly in terms of counts
-%    (or indeed weighted at all)
+    % parse inputs
+    ip = inputParser();
+    ip.StructExpand = true;
+    ip.addRequired('x', @isnumeric);
+    ip.addRequired('u', @isstruct);
+    ip.addParamValue('hard_kmeans', false, @isscalar);
+    ip.addParamValue('soft_kmeans', false, @isscalar);
+    ip.addParamValue('threshold', 1e-5, @isscalar);
+    ip.addParamValue('quiet', true, @isscalar);
+    ip.parse(x, u, varargin{:});
+    args = ip.Results;
+    x = args.x;
+    u = args.u;
+    K = length(u.mu);
+    T = size(x, 1);
+    D = size(x, 2);
 
-% Parse variable arguments
-randomize = true;
-for i = 1:length(varargin)
-    if isstr(varargin{i})
-        switch lower(varargin{i})
-        case {'randomize'}
-            randomize = varargin{i+1};
+    % this is necessary just so matlab does not complain about 
+    % structs being dissimilar because of the order of the fields
+    w = u;
+
+    % initialize first guess from prior parameters
+    % draw mixture weights from dirichlet
+    theta0.pi = dirrnd(u.pi(:)', 1)';
+
+    for k = 1:K
+        % draw precision matrix from wishart
+        Lambda0 = wishrnd(u.W(k, :, :), u.nu(k));
+        theta0.Sigma(:, :, k) = inv(Lambda0); 
+        % draw mu from multivariate normal
+        theta0.mu(k, :) = mvnrnd(u.mu(k, :), inv(u.beta(k) * Lambda0));
+    end
+
+    % refine centers using hard kmeans
+    if args.hard_kmeans
+        % run hard kmeans to get cluster centres
+        if K > 1
+            [idxs mu] = kmeans(x, K, 'Start', theta0.mu);
+        else
+            idxs = ones(length(x), 1);
+        end
+        % estimate weight, mean and std dev
+        for k = 1:K
+            msk = (idxs == k);
+            pi0 = sum(msk) / T;
+            mu0 = mean(x(msk), 1);
+            dx = bsxfun(@minus, x, mu0);
+            dx2 = bsxfun(@times, dx, reshape(dx, [length(msk), 1 D]));
+            Sigma0 = squeeze(mean(dx2, 1)) + 1e-6 * (sum(msk) == 1);
+
+            theta0.pi(k, 1) = pi0;
+            theta0.mu(k, :) = mu0;
+            theta0.Sigma(:, :, k) = Sigma0;
         end
     end
-end 
+    
+    % refine centers using a gaussian mixture model (soft kmeans)
+    if args.soft_kmeans
+        if K > 1
+            % specify initial parameter values as gmdistribution struct
+            gmm0.PComponents = theta0.pi(:)';
+            gmm0.mu = theta0.mu;
+            gmm0.Sigma = theta0.Sigma;        
 
-% number of states
-K = length(u.pi);
-% number of time points
-T = counts;
-% signal dimension (1 for FRET or 2 for Donor/Acceptor inference)
-D = size(u.W, 2);
+            % silence convergence warnings
+            if args.quiet
+                warn = warning('off', 'stats:gmdistribution:FailedToConverge');
+            end
+        
+            % run soft kmeans
+            gmm = gmdistribution.fit(x, K, 'Start', gmm0, ...
+                                     'CovType', 'diagonal', 'Regularize', 1e-6, ...
+                                     'Options', struct('Tolerance', args.threshold));
 
-% this is necessary just so matlab does not complain about 
-% structs being dissimilar because of the order of the fields
-w = u;
+            % unsilence convergence warnings
+            if args.quiet
+                warning(warn);
+            end
+        else
+            gmm = gmdistribution.fit(x, 1, 'Regularize', 1e-6, ...
+                                     'Options', struct('Tolerance', args.threshold));
+        end
+            
+        theta0.pi = gmm.PComponents(:);
+        theta0.mu = gmm.mu;
+        theta0.Sigma = gmm.Sigma;                  
+    end
 
-if randomize
-	% draw pi ~ Dir(u.pi) 
-	theta.pi = dirrnd(u.pi', 1)';
-	% draw A ~ Dir(u.A) 
-	theta.A = dirrnd(u.A);
-	% draw state means and emission precision matrices
-	%
-	%   mu ~ N(u.mu, Inv(u.beta * Lambda))
-	%   Lambda ~ Wish(u.W, u.nu) for each k
-	mu = zeros(K, D);
-	Lambda = zeros(K, D, D);
-	for k = 1:K
-	    % draw precision matrix from wishart
-	    Lambda(k, :, :) = wishrnd(u.W(k, :, :), u.nu(k));
-	    % draw mu from multivariate normal
-	    mu(k, :) = mvnrnd(u.mu(k, :), inv(u.beta(k) * Lambda(k, :, :)));
-	end
-	theta.mu = mu;
-	theta.L = Lambda;
-else
-	% set parameters to expectation under prior
-	theta.pi = normalize(u.pi);
-	theta.A = normalize(u.A, 2);
-	theta.mu = u.mu;
-	theta.L = u.W .* u.nu; 
-end
+    % assign results
+    theta.pi = theta0.pi(:);
+    theta.mu = theta0.mu;
+    for k = 1:K
+        theta.Lambda(k, :, :) = inv(theta0.Sigma(:,:,k));
+    end
 
-% add pi to prior with count 1
-w.pi = u.pi + theta.pi;
+    % draw transition matrix from dirichlet
+    theta.A = dirrnd(u.A);
 
-% add draw A ~ Dir(u.A) to prior with count (T-1)/K for each row  
-w.A = u.A + theta.A .* (T-1) ./ K;
+    % add pi to prior with count 1
+    w.pi = u.pi + theta.pi;
 
-% TODO: why did JonBron add 0.1 to every element here?
-% w.ua(k, :) = u.ua(k, :) + dirrnd(u.ua(k, :) + 0.1, 1) .* (T-1) ./ K;
+    % add draw A ~ Dir(u.A) to prior with count (T-1)/K for each row  
+    w.A = u.A + theta.A .* (T-1) ./ K;
 
-% add T/K counts to beta and nu
-w.beta = u.beta + T/K;
-w.nu = w.beta + 1;
+    % add T/K counts to beta and nu
+    w.beta = u.beta + T/K;
+    w.nu = w.beta + 1;
 
-for k = 1:K
-    % w.mu = (u.beta * u.mu + T/K * mu) / (u.beta + T/K)
-    w.mu(k, :) = (u.beta(k) * u.mu(k, :) + T/K * theta.mu(k,:)) / w.beta(k);;
-end
+    for k = 1:K
+        w.mu(k, :) = (u.beta(k) * u.mu(k, :) + T/K * theta.mu(k,:)) / w.beta(k);;
+    end
 
-% set W such that W nu = L 
-% TODO: this should be a proper update, but ok for now
-w.W = bsxfun(@times, theta.L, 1 ./ w.nu);
-
-% this is grossly retarded, but apparently the only way to get the fields in order
-w.pi = w.pi;
-w.A = w.A;
-w.mu = w.mu;
-w.beta = w.beta;
-w.W = w.W;
-w.nu = w.nu;
+    % set W such that W nu = L 
+    % TODO: this should be a proper update, but ok for now
+    w.W = bsxfun(@times, theta.Lambda, 1 ./ w.nu);

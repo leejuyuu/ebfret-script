@@ -55,21 +55,26 @@ function [u, L, vb, vit, omega] = hmi(data, u0, w0, varargin)
 % Variable Inputs
 % ---------------
 %
-%   restarts : int
-%     Number of VBEM restarts to perform for each trace.
-%
-%   do_restarts : 'init', 'always'
-%     Specifies whether restarts should be performed only when 
-%     determining the initial value of w (default, faster), or at 
-%     every hierarchical iteration (slower, but in some cases more 
-%     accurate).
-%
 %   threshold : float
 %     Convergence threshold. Execution halts when fractional increase 
 %     in total summed evidence drops below this value.
 %
 %   max_iter : int (default 100)
 %     Maximum number of iterations 
+%
+%   restarts : int
+%     Number of VBEM restarts to perform for each trace.
+%
+%   do_restarts : {'init', 'always'} (default: 'init')
+%     Specifies whether restarts should be performed only when 
+%     determining the initial value of w (default, faster), or at 
+%     every hierarchical iteration (slower, but in some cases more 
+%     accurate).
+%
+%   soft_kmeans : {'off', 'init', 'always'} (default: 'init')
+%     Runs Gaussian Mixture Model EM algorithm on trace when
+%     initializing posterior parameters. Can be used on initial
+%     iteration only, or all iterations.
 %
 %   display : {'hstep', 'trace', 'off'} (default: 'off')
 %     Print status information.
@@ -125,13 +130,14 @@ ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);
-ip.addOptional('w0', struct(), @isstruct);
+ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'mu'));
+ip.addParamValue('threshold', 1e-5, @isscalar);
+ip.addParamValue('max_iter', 100, @isscalar);
 ip.addParamValue('restarts', 10, @isscalar);
 ip.addParamValue('do_restarts', 'init', ...
                   @(s) any(strcmpi(s, {'always', 'init'})));
-ip.addParamValue('threshold', 1e-5, @isscalar);
-ip.addParamValue('max_iter', 100, @isscalar);
-ip.addParamValue('boolean', true, @isscalar);
+ip.addParamValue('soft_kmeans', 'init', ...
+                  @(s) any(strcmpi(s, {'always', 'init', 'off'})));
 ip.addParamValue('display', 'off', ...
                   @(s) any(strcmpi(s, {'hstep', 'trace', 'off'})));
 ip.addParamValue('vbem', struct(), @isstruct);
@@ -164,7 +170,14 @@ while ~converged
         %
         % on subsequent iterations, the result from the previous
         % iteration is used in the fist restart
+
+        % are we doing soft kmeans?
+        soft_kmeans = isequal(args.soft_kmeans, 'always') | ((it == 1) & isequal(args.soft_kmeans, 'init'));
+
         if (it == 1)
+            if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
+                fprintf('hmi: %d states, it %d, init\n', K, 0)
+            end
             switch length(args.w0(:))
                 case N*M
                     [w0(:, :, 1)] =  args.w0;
@@ -174,8 +187,11 @@ while ~converged
                     end
                 otherwise
                     for n = 1:N
+                        if strcmpi(args.display, 'trace')
+                            fprintf('hmi: %d states, it %d, trace %d of %d\n', K, 0, n, N);
+                        end    
                         for m = 1:M 
-                            w0(n, m, 1) =  init_w_gmm(data{n}, u0(m));
+                            w0(n, m, 1) =  init_w(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
                         end
                     end
             end
@@ -190,7 +206,7 @@ while ~converged
             for n = 1:N
                 for m = 1:M
                     % draw w0 from prior u for other restarts
-                    w0(n, m, r) = init_w(u(it, m), length(data{n}));
+                    w0(n, m, r) = init_w(data{n}, u(it, m), 'soft_kmeans', soft_kmeans);
                 end
             end
         end
@@ -221,20 +237,20 @@ while ~converged
     end
 
     % calculate prior mixture responsiblities for each trace
-    Lit = squeeze(L(it, :, :));
+    Lit = reshape(L(it, :, :), [N M]);
     L0 = bsxfun(@minus, Lit , mean(Lit, 2));
     omega(it).gamma = normalize(bsxfun(@times, exp(L0), omega(it).pi'), 2);
     omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
 
     % calculate summed evidence
-    sL(it) = sum(sum(normalize(omega(it).gamma, 1) .* Lit, 2), 1);
+    sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
 
-    if strcmpi(args.display, 'hstep')
+    if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
         fprintf('hmi: %d, L: %e, rel increase: %.2e\n', it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it));
     end    
 
     % check for convergence
-    if (it > 1) & ((sL(it) - sL(it-1)) < args.threshold * abs(sL(it-1)) | it > args.max_iter)
+    if (it > 1) & abs((sL(it) - sL(it-1)) < args.threshold * abs(sL(it-1)) | it > args.max_iter)
         if sL(it) < sL(it-1)
           it = it-1;
         end

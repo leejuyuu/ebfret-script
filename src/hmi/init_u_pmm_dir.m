@@ -1,4 +1,4 @@
-function u = init_u_pmm_dir(M, vb, u, varargin)
+function u = init_u_pmm_dir(M, w, u, varargin)
 	% u = init_u_pmm_dir(M, vb, u)
 	%
 	% Initializes a set of hyperparameters with M subpopulations.
@@ -13,21 +13,22 @@ function u = init_u_pmm_dir(M, vb, u, varargin)
     % Inputs
     % ------
     % 
-    % vb : (1xN) struct
-    %   VBEM output for each trace (see function docs)
-    %
-    % u : struct
-    %   Hyperparameters obtained from HMI process (see function docs)
-    %
     % M : int
     %   Number of subpopulations. If input hyperparameters have K 
     %   states, output parameters will have K x M states.
+    %
+    % w : (Nx1) struct
+    %   Posterior parameters obtained from VBEM for each trace
+    %   (see function docs)
+    %
+    % u : struct
+    %   Hyperparameters obtained from HMI process (see function docs)
     %
     % Variable Inputs
     % ---------------
     %
     % restarts : int (default: 10)
-    %   Number of VBEM restarts to perform for each trace.
+    %   Number of VBEM restarts to perform for each trace
     %
     % display : {'off', 'final', 'all'} (default: 'off')
     %   Display progress after final or for every restart
@@ -35,8 +36,8 @@ function u = init_u_pmm_dir(M, vb, u, varargin)
     % Outputs
     % -------
     %
-    % u : struct
-    %   Hyperparameters for K x M state system. 
+    % u : (M x 1) struct
+    %   Hyperparameters for each mixture component
     %
     %
     % TODO: we could initialize u.pi based on the pmm_dir results
@@ -50,42 +51,31 @@ function u = init_u_pmm_dir(M, vb, u, varargin)
     ip = inputParser();
     ip.StructExpand = true;
     ip.addRequired('M', @isscalar);
-    ip.addRequired('vb', @isstruct);
+    ip.addRequired('w', @isstruct);
     ip.addRequired('u', @isstruct);
     ip.addParamValue('restarts', 10, @isscalar);
     ip.addParamValue('display', 'off', ...
                       @(s) any(strcmpi(s, {'off', 'final', 'all'})));
-    ip.parse(M, vb, u, varargin{:});
+    ip.parse(M, w, u, varargin{:});
     args = ip.Results;
     M = args.M;
     K = length(args.u.mu);
-
-    % duplicate hyperparameters for each subpopulation
-    append_u = @(u, v) struct('pi', [u.pi; v.pi], ...
-                              'A', cat(1, cat(2, u.A, eps + zeros(size(u.A,1), size(v.A,2))), ...  
-                                        cat(2, eps + zeros(size(v.A,1), size(u.A,2)), v.A)), ...
-                              'mu', [u.mu; v.mu], ...
-                              'beta', [length(u.beta) * u.beta; ...
-                                     length(v.beta) * v.beta] ...
-                                     / (length(u.beta) + length(v.beta)), ...
-                              'W', [u.W; v.W], ...
-                              'nu', [length(u.nu) * u.nu; ...
-                                     length(v.nu) * v.nu] ...
-                                     / (length(u.nu) + length(v.nu)));
     u = args.u;
+
+    % calculate posterior pseudcounts for each trace
+    Xi = arrayfun(@(w) w.A - u.A, w, 'UniformOutput', false);
+    Xi = permute(cat(3, Xi{:}), [3 1 2]);
+
+    % replicate hyperparameters for M components
     for m = 2:M
-        u = append_u(u, args.u);
+        u(m) = u(1);
     end
 
-    % run parameter mixture model to refine guess for trans matrix
-    w = [args.vb(:).w];
-    Xi = arrayfun(@(w) w.A - args.u.A, w, 'UniformOutput', false);
-    Xi = permute(cat(3, Xi{:}), [3 1 2]);
     L_max = -inf;
     for r = 1:args.restarts
         if r == 1
             % do not randomize for first restart
-            u_A0 = permute(repmat(args.u.A, [1 1 M]), [3 1 2]);
+            u_A0 = permute(cat(3, u.A), [3 1 2]);
         else 
             % randomize by draw from dirichlet               
             u_A0 = zeros(M, K, K);
@@ -115,7 +105,7 @@ function u = init_u_pmm_dir(M, vb, u, varargin)
             rng = @(m) (1:K) + (m-1) * K;
             for m = 1:M
                 % set transition matrix prior
-                u.A(rng(m), rng(m)) = squeeze(u_A(m, :, :));
+                u(m).A = squeeze(u_A(m, :, :));
             end
         end
     end

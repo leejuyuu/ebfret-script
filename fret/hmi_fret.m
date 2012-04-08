@@ -1,5 +1,5 @@
 function runs = hmi_fret(x, K_values, restarts, varargin)
-    % hmi_fret(save_name, x, K_values, restarts, varargin)
+    % hmi_fret(x, K_values, restarts, varargin)
     %
     % Runs HMI inference on a set of FRET time series.
     %
@@ -19,7 +19,14 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     % Variable Inputs
     % ---------------
     %
-    % 'num_cpu' : int (default: 1)
+    % 'u0_strength' : float (default = 0.1)
+    %   Strength of hyperparameters used in each HMI restart.
+    %   Specified as a fraction of the mean trace length. 
+    %
+    %   Note: this value is currently only applied to the emission
+    %   model prior, where the transition rate prior is uninformative.
+    %
+    % 'num_cpu' : int (default = 1)
     %   Number of cpu's to use
     %
     % 'hmi' : struct
@@ -59,6 +66,7 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     ip.addRequired('x', @iscell);
     ip.addRequired('K_values', @isnumeric);
     ip.addRequired('restarts', @isscalar);
+    ip.addParamValue('u0_strength', 0.1, @isscalar);
     ip.addParamValue('num_cpu', 1, @isscalar);
     ip.addParamValue('hmi', struct(), @isstruct);
     ip.addParamValue('vbem', struct(), @isstruct);
@@ -86,7 +94,10 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
         end
     end
 
-    try
+    % try
+        % calculate counts to assign to prior
+        u0_counts = opts.u0_strength * mean(cellfun(@length, x));
+
         % generate set of initial guesses for hyperparameters
         for k = 1:length(opts.K_values)
             K = opts.K_values(k);
@@ -100,16 +111,17 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
             end
             for r = 1:opts.restarts
                 if K >1
-                    u0(k, r) = init_u(K, 'mu_sep', sep_range(r));
+                    u0(k, r) = init_u(K, 'mu_sep', sep_range(r), ...
+                                      'mu_counts', u0_counts);
                 else
-                    u0(k, r) = init_u(K);
+                    u0(k, r) = init_u(K, 'mu_counts', u0_counts);
                 end
             end
         end
 
         % run hmi for every set of hyperparameters
         runs = cell(length(opts.K_values), 1);
-        parfor k = 1:length(opts.K_values)
+        for k = 1:length(opts.K_values)
             rn = cell(opts.restarts, 1);
             for r = 1:opts.restarts
                 rn{r} = struct();
@@ -123,16 +135,22 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
         end
         runs = cat(1, runs{:});
         runs = reshape([runs{:}], [length(opts.K_values), opts.restarts]);
-    catch ME
-        % ok something went wrong here, so dump workspace to disk for inspection
-        day_time =  datestr(now, 'yymmdd-HH.MM');
-        save_name = sprintf('crashdump-hmi_fret-%s.mat', day_time);
-        save(save_name);
 
-        % close matlabpool if necessary
-        if opts.num_cpu > 1
-            matlabpool('CLOSE');
-        end
+        % keep best run
+        L = arrayfun(@(r) r.L(end), runs);
+        kdxs = bsxfun(@eq, L, max(L, [], 2)) * (1:opts.restarts)';
+        rdxs = (kdxs-1) * length(opts.K_values) + (1:length(opts.K_values))';
+        runs = runs(rdxs);
+    % catch ME
+    %     % ok something went wrong here, so dump workspace to disk for inspection
+    %     day_time =  datestr(now, 'yymmdd-HH.MM');
+    %     save_name = sprintf('crashdump-hmi_fret-%s.mat', day_time);
+    %     save(save_name);
 
-        throw(ME);
-    end
+    %     % close matlabpool if necessary
+    %     if opts.num_cpu > 1
+    %         matlabpool('CLOSE');
+    %     end
+
+    %     throw(ME);
+    % end
