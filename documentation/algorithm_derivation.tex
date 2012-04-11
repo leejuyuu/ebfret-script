@@ -1,0 +1,1288 @@
+\input{template_notes.tex}
+\newcommand{\ps}[2]{\ensuremath{p^*(#1 \:|\: #2)}}
+\newcommand{\q}[2]{\ensuremath{q(#1 \:|\: #2)}}
+
+\begin{document}
+
+\chapter*{Hierarchical Inference on Single-molecule Time Series,\\ using VBEM and Emperical Bayes on HMM's} 
+
+\begin{KeepFromToc}
+  \tableofcontents
+\end{KeepFromToc}
+
+\chapter{Model Properties}
+
+\section{Data, latent states, parameters}
+
+\hspace{\mathindent}
+\begin{tabular}{ll}
+  $x = \{x_n\} = \{\{x_{n,t}\}\}$   %
+    & Observation in trace $n \in \{1 \ldots N\}$ at time $t \in \{1 \ldots T_n\}$ \\
+  $z = \{z_n\} = \{\{z_{n,t}\}\}$ %
+     & State of molecule $n$ at time $t$ \\
+  \smallskip \\  
+  $\theta = \{\theta_n\} = \{\pi_n, A_n, \mu_n, \lambda_n\}$ %      
+    & Parameters for trace $n$\\
+  \smallskip \\  
+  $\pi_n = \{\pi_{n,k}\}$ %
+    & Initial probabilities: Prob that trace starts in state $k$ \\
+  $A_n = \{\{A_{n,k,l}\}\}$ %
+    & Transition matrix: Prob of moving from state $k$ to state $l$\\
+  $\mu_n = \{\mu_{n,k}\}$ %
+    & FRET level for state $k$ in trace $n$ \\
+  $\lambda_n = \{\lambda_{n,k}\}$ %
+    & FRET emissions precision (1/var) for state $k$ in trace $n$ \\
+  $u = \{\{u^\mu_k, u^\beta_k, u^W_k, u^\nu_k \}, \{u^A_k\}, \{u^\pi\} \}$ %
+    & Hyperparameters for ensemble distribution (prior)
+\end{tabular}
+\medskip
+
+\section{Evidence}
+\begin{align}
+  \begin{split}
+  \p{x}{u} 
+       &= \int \d{\theta} \p{x, \theta}{u} \\
+       &= \int \d{\theta} \p{x}{\theta} \p{\theta}{u} \\ 
+       &= \int \d{\theta} \prod_n \p{x_n}{\theta_n} \p{\theta_n}{u} \\ 
+       &= \prod_n  \int \d{\theta_n} \p{x_n}{\theta_n} \p{\theta_n}{u}
+  \end{split}  
+\end{align}
+
+\subsection{Likelihood}
+\begin{align}
+  \begin{split}
+  \p{x}{\theta} &= \prod_n \p{x_n}{\theta_n} \\
+                &= \prod_n \sum_{z_n} \p{x_n , z_n}{\theta_n} \\
+                &= \prod_n \sum_{z_n} \p{x_n}{z_n, \theta_n} \p{z_n}{\theta_n}
+  \end{split}
+\end{align}
+
+\section{Emissions model}
+\begin{align}
+  \begin{split}
+  \p{x_n}{z_n, \theta_n} &= \prod_{n} \sum_{z_n} \prod_t 
+                            \p{x_{n,t}}{z_{n,t} \,,\, \theta_{n}} \\
+                         &= \prod_{n} \sum_{z_n} \prod_t \prod_k 
+                            \p{x_{n,t}}{\theta_{n,k}}^{z_{n,t,k}}
+  \end{split}\\
+  \begin{split}
+    \p{x_{n,t}}{\theta_{n,k}} 
+    &= N(x_{n,t} \,|\, \mu_{n,k}, \lambda_{n,k}) \\ 
+    &= (\lambda_{n,k}/2\pi)^{1/2} \exp[-\tfrac{1}{2} \Delta_{n,t,k}^2] 
+  \end{split} \\
+  \Delta_{n,t,k}^2
+  &= 
+  \lambda_{n,k} (x_{n,t} - \mu_{n,k})^2
+\end{align}
+
+\section{Transition probabilities (HMM)}
+\begin{align}
+ \p{z_n}{\theta_n} &= \left[
+                        \prod_{t=2}^{T_n} \p{z_{n,t}}{z_{n,t-1}, \theta_n}
+                      \right]
+                      \p{z_{n,1}}{\theta_n} \\
+  \p{z_{n,t}}{z_{n,t-1} \,,\, \theta_{n}}
+      &= \prod_{k,l} (A_{n,k,l})^{z_{n,t-1,k} \, z_{n,t,l}} \\
+  \p{z_{1}}{\theta_{n}} 
+      &= \prod_k (\pi_{n,k})^{z_{n,1,k}}
+\end{align}
+
+\section{Ensemble Distributions (VBEM Priors)}
+\begin{align}
+ \begin{split}
+ \p{\theta_n}{u}
+    &= \p{\pi_n}{u} \p{A_n}{u} \p{\mu_n, \lambda_n}{u} \\
+    &= \p{\pi_n}{u} \prod_k \p{A_{n,k}}{u} \p{\mu_{n,k}, \lambda_{n,k}}{u} 
+ \end{split}\\
+ \pi_n 
+    &\sim \mathrm{Dir}(u^{\pi}) \\
+ A_{n,k} 
+    &\sim \mathrm{Dir}(u^{A}_{k}) \\
+ \lambda_{n,k}
+    &\sim \mathrm{Wish}(u^{W}_k, u^{\nu}_k) \\
+ \mu_{n,k}
+    &\sim \mathrm{N}(u^{\mu}_k, u^{\beta}_k \lambda_{n,k}) 
+\end{align}
+
+\section{Algorithm Outline}
+
+Loop over iterations $i$ until $\sum_n \L_n$ converges:
+\begin{itemize}
+ \item[1.] VBEM updates: obtain $q^{(i)}(\theta_n)$, $q^{(i)}(z_n)$, and $\L^{(i)}_n$ for each trace $n$, using $p^{(i-1)}(\theta_n)$ as the VBEM prior on the paramters.
+ \item[2.] Hierarchical updates: solve for 
+  \[
+    p^{(i)}(\theta \:|\: u) = \arg\max_{p(\theta)} \sum_n \L^{(i)}_n[q^{(i)}(z_n), q^{(i)}(\theta_n), \p{\theta}{u}]
+  \]
+\end{itemize}
+
+\chapter{Conjugate-Exponential Form}
+
+Given that all our likelihoods and prior are in the exponential family, the likelihood $\p{x}{\eta}$ and the prior $\p{\eta}{\nu, \chi}$ can be written in a common general form:
+\begin{align}
+  \p{x}{\eta} &= f(x) g(\theta) \exp[\eta \cdot \upsilon(x)] \\
+  \p{\eta}{\nu, \chi} &= h(\nu, \chi) g(\theta)^\nu \exp [\eta \cdot \chi]
+\end{align}
+where $\eta$ represents the remapped parameters $\theta$, and $\{\nu, \chi\}$ represent the remapped hyperparameters to this general form. The posterior $\p{\eta}{x,\nu,\chi}$ now takes the form:
+\begin{align}
+  \p{\eta}{x,\nu,\chi} 
+  &\propto 
+  \p{x}{\eta}\p{\eta}{\nu,\chi} \\
+  &=
+  f(x) h(\nu, \chi) g^{\nu + 1} \exp [ \eta \cdot (\chi + \upsilon(x)) ]
+\end{align}
+which of course yields a distribution of the same form as the prior
+\begin{align}
+  \p{\eta}{x,\nu,\chi} 
+  &=
+  \p{\eta}{\tilde\nu, \tilde\chi}
+\end{align}
+with parameters
+\begin{align}
+  \tilde \nu
+  &= 
+  \nu + 1 \\
+  \tilde \chi
+  &=
+  \chi + \upsilon(x)
+\end{align}
+In generalized exponential form, the hyperparameter $\nu$ can be interpreted as scale factor, that encodes the number of  spreviously observed samples. The hyperparameter vector $\chi$, in turn takes the role of the summed sufficient statistics $\upsilon(x)$ associated with each of the samples. 
+
+\section{Normal-Gamma}
+
+\begin{align}
+  &
+  \p{x}{\mu,\lambda} 
+  =
+  N(x \:|\: \mu, \lambda)\\
+  &
+  \p{\mu, \lambda}{u^\mu, u^\beta, u^a, u^b}
+  =
+  N(\mu \:|\: u^\mu, \lambda u^\beta) \mathrm{Gamma}(\lambda \:|\: u^a, u^b) 
+\end{align}
+\begin{align}
+  \eta &= \{ \lambda, \lambda \mu \} \\
+  \nu &= u^\beta = 2 u^a - 1 \\
+  \chi &= \{ -\tfrac{1}{2}(u^\beta (u^\mu)^2 + 2 u^b), u^\beta u^\mu \}
+\end{align}
+\begin{align}
+  g(\eta) &= (\eta_1 / 2\pi)^{1/2} \exp [-\eta_2^2 / 2 \eta_1] \\
+  \upsilon(x) &= \{-\tfrac{1}{2} x^2, x \}
+\end{align}
+\begin{align}
+  f(x) &= 1 \\
+  h(\nu, \chi) &= (2 \pi)^{(\nu-1)/2}  \nu^{1/2}  (-\chi_1 - \chi_2^2/\nu)^{(\nu+1)/2}
+\end{align}
+
+\section{Normal-Wishart (1d)} \label{ssec:conj-exp-norm-wish}
+
+\begin{align}
+  &
+  \p{x}{\mu,\lambda} 
+  =
+  N(x \:|\: \mu, \lambda)\\
+  &
+  \p{\mu, \lambda}{u^\mu, u^\beta, u^a, u^b}
+  =
+  N(\mu \:|\: u^\mu, \lambda u^\beta) \mathrm{Wish}(\lambda \:|\: u^W, u^\nu) 
+\end{align}
+\begin{align}
+  \eta &= \{ \lambda, \lambda \mu \} \\
+  \nu &= u^\beta = u^\nu - 1 \\
+  \chi &= \{ -\tfrac{1}{2}(u^\beta (u^\mu)^2 + 1/u^W), u^\beta u^\mu \}
+\end{align}
+Functions $g(\eta)$, $u(x)$, $f(x)$ and $h(\nu, \chi)$ are the same as with a Normal-Gamma distribution.
+
+\section{Dirichlet} \label{ssec:conj-exp-dir}
+
+\begin{align}
+  &
+  \p{z}{\pi} 
+  =
+  \mathrm{Cat}(z \:|\: \pi) = \prod_k \pi_k ^ {z_k}\\
+  &
+  \p{\pi}{u^\pi}
+  =
+  \mathrm{Dir}(\pi \:|\: u^\pi)
+  = \frac{\Gamma(\sum_k u^\pi_k)}{\prod_k \Gamma(u^\pi_k)} \prod_k \pi_k ^ {u^\pi_k - 1}  
+\end{align}
+\begin{align}
+  \eta &= \{ \ln \pi_k \} \\
+  \nu &= 1 \\
+  \chi &= \{ u^\pi_k \}
+\end{align}
+\begin{align}
+  g(\eta) &= 1 \\
+  \upsilon(z) &= \{ z_k \}
+\end{align}
+\begin{align}
+  f(x) &= 1 \\
+  h(\nu, \chi) &= \frac{\prod_k \Gamma(\chi_k+1)}{\Gamma(\sum_k (\chi_k + 1))}
+\end{align}
+
+
+\chapter{Variational Bayes Expectation Maximization (VBEM)}
+
+\emph{Note}: We will omit the $n$-subscript in this section, since VBEM is performed on one trace at a time.
+
+When performing (structured) VBEM on a Hidden Markov Model, we introduce an approximating factorization for the posterior $\p{z,\theta}{x} \simeq q(z)q(\theta)$, that allows calculation of a lower bound on the log-evidence (using Jensen's inequality):
+\begin{align}
+  \begin{split}
+  \ln p(x) &= \ln
+              \left[
+                \int \d{\theta}
+                \sum_{z} 
+                p(x, z, \theta) 
+              \right] \\
+           &= \ln
+              \left[
+                \int \d{\theta}
+                \sum_{z}
+                  q(z) q(\theta) 
+                  \frac{p(x, z, \theta)}
+                       {q(z) q(\theta)}
+              \right] \\
+           &\ge \int \d{\theta}
+                \sum_{z}  
+                q(z) q(\theta)
+                \ln
+                \left[
+                  \frac{p(x, z, \theta)}
+                       {q(z) q(\theta)}  
+                \right] \\
+           &= \L[q(z), q(\theta)]
+  \end{split}
+\end{align} 
+The lower bound $\L$ is tight if $q(z)q(\theta) = \p{z, \theta}{x}$:
+\begin{align}
+  \begin{split}
+  \L[q(z), q(\theta)]
+    &=
+    \int \d{\theta}
+    \sum_{z}  
+    q(z) q(\theta)
+    \ln
+    \left[
+      \frac{p(x, z, \theta)}
+            {q(z) q(\theta)}  
+    \right] \\  
+    &=
+    \int \d{\theta}
+    \sum_{z}  
+    \p{z, \theta}{x}
+    \ln
+    \left[
+      \frac{p(x, z, \theta)}
+            {\p{z, \theta}{x}}  
+    \right] \\  
+    &=
+    \int \d{\theta}
+    \sum_{z}  
+    \p{z, \theta}{x}
+    \ln
+    \left[
+      \frac{\p{z, \theta}{x} p(x)}
+           {\p{z, \theta}{x}}  
+    \right] \\  
+    &=
+    \int \d{\theta}
+    \sum_{z}  
+    \p{z, \theta}{x}
+    \ln p(x) \\  
+    &=
+    \ln p(x)
+    \int \d{\theta}
+    \sum_{z}  
+    \p{z, \theta}{x} \\
+    &=
+     \ln p(x)
+  \end{split}
+\end{align}
+
+\section{Updates}
+
+Loop until $\L$ converges. For $i$-th iteration:
+\begin{itemize}
+ \item[1.] E-step: keeping $q^{(i)}(\theta)$ fixed, solve for
+   \[
+     q^{(i+1)}(z) = \arg\max_{q(z)} \L[q(z), q^{(i)}(\theta)]
+   \]
+   
+ \item[2.] M-step: keeping $q^{(i)}(z)$ fixed, solve for  
+   \[
+     q^{(i+1)}(\theta) = \arg\max_{q(\theta)} \L[q^{(i)}(z), q(\theta)]
+   \]
+   
+\end{itemize}
+
+
+\section{E-step}
+
+To maximize $\L$ w.r.t. $q(z)$, we solve $\nabla_{q(z)} \L = 0$, introducing a Lagrange multiplier $\lambda_z$ to ensure normalization:
+\begin{align}
+  \begin{split}
+  0 = \nabla_{q(z)} &
+  \left[ 
+    \L[q(z), q(\theta)] 
+    + \lambda_z \left( 1 - \sum_{z'} q(z') \right)
+  \right] \\
+  = &
+  \left[
+  \int \d{\theta} 
+  q(\theta)
+  \left(
+  \ln p(x, z, \theta)
+  - \ln q(z) 
+  - \ln q(\theta)
+  - 1
+  \right)
+  \right]
+  - \lambda_z
+  \end{split}
+\end{align}
+We can pull $\ln q(z)$ out of the integral, since it has no dependence on $\theta$. This yields
+\begin{align}
+  \begin{split}
+  \ln q(z) 
+  &=
+    \left[
+    \int \d{\theta}  
+    q(\theta)
+    \left(
+    \ln p(x, z, \theta)
+    - \ln q(\theta) 
+    - 1
+    \right)
+    \right]
+    - \lambda_z \\
+  &=
+    E_{q(\theta)} [ \ln p(x, z, \theta) ] -  
+    E_{q(\theta)} [ \ln q(\theta) ] - (1 + \lambda_{\theta})\\
+  &=
+    E_{q(\theta)} [ \ln p(x, z, \theta) ] -  
+    \ln Z_{q(\theta)}
+  \end{split}
+\end{align}
+here we have absorbed all terms without a $z$-dependence into a constant $\ln Z_{q(z)}$. The approximate posterior $q(z)$ is obtained by taking the exponent of the above equation
+\begin{align}
+  q(z) &= \frac{1}{Z_{q(\theta)}} 
+            \exp \left[ E_{q(\theta)} [ \ln p(x, z, \theta) ] \right]
+\end{align}
+where normalization of $q(z)$ implies
+\begin{align}
+  Z_{q(z)}
+  &= \sum_{z} \exp \left[ E_{q(\theta)} [ \ln p(x, z, \theta) ] \right]
+\end{align}
+
+The expectation of $p(x, z, \theta)$ w.r.t. $q(\theta)$ expands to:
+\begin{align}
+  E_{q(\theta)} [ \ln p(x, z, \theta) ]
+  & =
+  \int \d{\theta} 
+  q(\theta)
+  \left[
+  \ln \p{x}{z, \theta} 
+  + \ln \p{z}{\theta}
+  + \ln \p{\theta}{u}
+  \right]
+\end{align}
+The $z$-dependent terms can be written as:
+\begin{align}
+  \begin{split}
+    E_{q(\theta)} [ \ln \p{x}{z, \theta} ]
+    = &  
+    \sum_t \sum_k 
+    z_{t,k} 
+    \int \d{\theta} q(\theta)
+    \left[
+      \tfrac{1}{2} \ln \left( \ifrac{\lambda_{k}}{2\pi} \right)
+      - \tfrac{1}{2} \Delta^2
+    \right] \\
+    = &  
+    \sum_t  
+    z_{t}^{\T} 
+    \cdot 
+    E_{q(\theta)} [ \tfrac{1}{2} \ln \left( \ifrac{\lambda_{:}}{2\pi} \right)
+                            - \tfrac{1}{2} \Delta^2]
+  \end{split}
+\end{align}
+and
+\begin{align}
+  \begin{split}
+    E_{q(\theta)} [ \ln \p{z}{\theta} ] 
+    = & 
+    \sum_{t=2}^{T}
+    \sum_{k,l}
+    z_{t,l} z_{t \mm 1,k} 
+    \int \d{\theta} q(\theta)
+    \ln A_{kl} \\
+    & +
+    \sum_k
+    z_{1,k}
+    \int \d{\theta} q(\theta)
+    \ln \pi_{k} \\
+    = & 
+    \sum_{t=2}^{T}
+    z_{t - 1}^{\T} 
+    \cdot
+    E_{q(\theta)} [ \ln A ]
+    \cdot 
+    z_{t} 
+    + z_{t}^{\T} 
+    \cdot 
+    E_{q(\theta)} [\ln \pi] 
+    % %
+    %   \ln \p{\theta}{u}
+    %   = & \\
+  \end{split}
+\end{align}
+Note that we do not need the expectation of the prior $E_{q(\theta)}[p(\theta)]$, since
+\begin{align}
+  \label{eq:qz}
+  \begin{split}
+    q(z) 
+    = & 
+    \frac{\exp \left( E_{q(\theta)}[\ln p(x, z, \theta)] \right)}
+          {\sum_{z} \exp \left(\ln E_{q(\theta)}[p(x, z, \theta)] \right)} \\
+    = &
+    \frac{\exp 
+          \left( 
+            E_{q(\theta)}[\ln \p{x, z}{\theta}] 
+            + E_{q(\theta)}[\ln p(\theta)] 
+          \right)}
+          {\sum_{z} 
+          \exp 
+          \left( 
+            E_{q(\theta)}[\ln \p{x, z}{\theta}] 
+            + E_{q(\theta)}[\ln p(\theta)] 
+          \right)} \\
+    = &
+    \frac{\exp 
+          \left( 
+            E_{q(\theta)}[\ln \p{x, z}{\theta}] 
+          \right)}
+          {\sum_{z} 
+          \exp 
+          \left( 
+            E_{q(\theta)}[\ln \p{x, z}{\theta}] 
+          \right)}
+    \frac{\exp 
+          \left( 
+            E_{q(\theta)}[\ln p(\theta)] 
+          \right)}
+          { 
+          \exp 
+          \left( 
+            E_{q(\theta)}[\ln p(\theta)] 
+          \right)}\\
+    = &
+    \frac{\exp 
+          \left( 
+            E_{q(\theta)}[\ln \p{x, z}{\theta}] 
+          \right)}
+          {\sum_{z} 
+          \exp 
+          \left( 
+            E_{q(\theta)}[\ln \p{x, z}{\theta}] 
+          \right)}
+  \end{split}
+\end{align}
+We see that the posterior $q(z)$ is parametrized by expectation under $q(\theta)$ of the squared Mahalanobis distance $E_{q(\theta)}[\Delta_{t,k}^2]$, and the logarithm of the parameters $E_{q(\theta)}[\ln \lambda]$, $E_{q(\theta)}[\ln A]$ and $E_{q(\theta)}[\ln \pi]$. This allows us to define
+\begin{align}
+  \label{eq:q_z_star}
+  \begin{split}
+    q(z)
+    &= \frac{1}{\hat{Z}_{q(z)}} p^*(x, z)\\
+    p^*(x, z) 
+    &= \exp \left[ E_{q(\theta)}[\ln \p{x, z}{\theta}] \right] \\
+    \hat{Z}_{q(z)}
+    &= \sum_{z} p^*(x, z)
+    = p^*(x) = Z_{q(z)} / E[p(\theta)]_{q(\theta)}
+  \end{split}
+\end{align}
+which decomposes into
+\begin{align}
+  p^*(x, z) 
+  &= \left[ \prod_t p^*(x_{t} \,|\, z_{t}) \right] p^*(z \,|\, \theta) \\
+  p^*(x_{t} \,|\, z_{t}=k) 
+  &= (\lambda^*_{k}/2 \pi)^{1/2} \exp \left[-\tfrac{1}{2} \Delta_{t,k}^{*2} \right]\\
+  p^*(z \,|\, \theta) &= p(z \,|\, A^*, \pi^*) 
+\end{align}
+by defining
+\begin{align}
+  \Delta^{*2} &= E_{q(\theta)} [ \Delta^2] \\
+  \ln \lambda^* &= E_{q(\theta)} [ \ln \lambda ] \\
+  \ln A^* &= E_{q(\theta)} [ \ln A ] \\
+  \ln \pi^* &= E_{q(\theta)} [ \ln \pi ]
+\end{align}
+This result is a specific example of a general property of all exponential family models with conjugate likelihood/prior pairs: we can always find a set of point-estimates $\eta^*$ such that
+(\emph{reference Beal here})
+\begin{align}
+ q(z) &= \frac{1}{Z_{q(\eta)}} \exp[E_{q(\eta)} [\ln p(x, z, \eta) ]] = \frac{1}{Z_{q(\eta)}} p(x, z, \eta^*)
+\end{align}
+In our specific case, this result implies that we could in principle compute some $\eta^*$ for the natural parameters for the Normal-Wishart distribution $\eta = \{ \lambda, \lambda \mu \}$, such that $\p{x}{\eta^*_k} = (\lambda^*_k/2 \pi)^{1/2} \exp[-\tfrac{1}{2}\Delta^{*2}]$. However for the purposes of implementing the VBEM algorithm, this step is not required to calculate $q(z)$.
+
+From the analytical forms of the priors, we can express the point estimates as (\emph{TODO: verify the algebra here}):
+\begin{align}
+  \Delta^{*2} &= 
+  (1/w^\beta_k)
+  + 
+  w^\nu_k w^W_k (x - w^\mu_k)^2 \\
+  \ln \lambda^* &= \psi (w^\nu_k) + \ln 2 w^W_k\\
+  \ln A_{k,l}^* &= \psi \left( w^A_{k,l} \right) - \psi \left( \sum_l w^A_{k,l} \right)\\
+  \ln \pi_{k}^* &= \psi \left( w^\pi_{k} \right) - \psi \left( \sum_k w^\pi_{k} \right)
+\end{align}
+
+In practice, we do not calculate $q(z)$ for all $K^T$ possible paths through the state space (which would be numerically unfeasible). Rather, show in the next section that the updates for $q(\theta)$ only require knowledge of a set of point estimates of the state $z_{t,k}$ and transition correlation $z_{t-1,k}z_{t,l}$. We will show how to calculate these using the \emph{forward-backward} algorithm at the end of the section.
+
+\section{M-step} 
+
+In the m-step we maximize $\L$ w.r.t. $q(\theta)$. Again $\lambda_\theta$ is a Lagrange multiplier. We now take the functional derivative instead of a gradient, but the steps are essentially the same.
+\begin{align}
+  0 = \fdff{}{q(\theta)} &
+  \left[ 
+    \L[q(z), q(\theta)] 
+    + \lambda_{\theta} \left( 1 - \int \d{\theta'} q(\theta') \right)
+  \right] \\
+  = & 
+  \left[
+    \sum_{z}  
+    q(z)
+    \left(
+    \ln p(x, z, \theta)
+    - \ln q(z) 
+    - \ln q(\theta)
+    - 1
+    \right)
+  \right]
+  - \lambda_\theta
+\end{align}
+like in the E-step, this reduces to
+\begin{align}
+  \ln q(\theta) 
+  &=
+    \left[
+    \sum_{z}  
+    q(z)
+    \left(
+    \ln p(x, z, \theta)
+    - \ln q(z) 
+    - 1
+    \right)
+    \right]
+    - \lambda_\theta \\
+  &=
+    E_{q(z)} [ \ln p(x, z, \theta) ] -  
+    E_{q(z)} [ \ln q(z) ] - (1 + \lambda_\theta)\\
+  &=
+    E_{q(z)} [ \ln p(x, z, \theta) ] -  
+    \ln Z_{q(\theta)} 
+\end{align}
+with normalization constant $Z_{q(\theta)}$
+\begin{align}
+  \ln Z_{q(\theta)}
+  &= \int \d{\theta} \sum_{z} q(z) \ln p(x, z, \theta)
+\end{align}
+The expectation of $\ln p(x, z, \theta)$ expands to:
+\begin{align}
+  \begin{split}
+    E_{q(z)}[\ln p(x, z, \theta)]
+    =&
+    E_{q(z)} [ \ln \p{x}{z, \theta} 
+    + E_{q(z)} [ \ln \p{z}{\theta} ] \\
+    &+ \ln \p{\theta}{u}
+  \end{split}
+\end{align}
+where the $z$-dependent terms become:
+\begin{align}
+  \begin{split}
+    E_{q(z)} [ \ln \p{x}{z, \theta} ]
+    = &  
+    \sum_{t} \sum_{k}  
+    E_{q(z)} [z_{t,k}] 
+    \left[ 
+      \tfrac{1}{2} \ln \left( \ifrac{\lambda_{k}}{2\pi} \right)
+      - \tfrac{1}{2} \Delta_{t,k}^2
+    \right]
+  \end{split} \\
+  \begin{split}
+    E_{q(z)} [ \ln \p{z}{\theta} ] 
+    = & 
+    \sum_{t=2}^{T}
+    \sum_{k,l}
+    E_{q(z)} [z_{t,l} z_{t \mm 1,k}] 
+    \ln A_{kl} \\
+    & + 
+    \sum_k
+    E_{q(z)} [z_{1,k}]
+    \ln \pi_{k} 
+  \end{split}
+\end{align}
+the sufficient statistics for $q(z)$, which can be calculated with a forward backward algorithm (see below), are given by:
+\begin{align}
+ \gamma_{t,k} &= E_{q(z)} [z_{t,k}] \\
+ \xi_{t,kl} &= E_{q(z)} [z_{t-1,k} z_{t,l}]
+\end{align}
+and the expression for $q(\theta)$ can be rewritten as:
+\begin{align}
+  \label{eq:q_theta}
+  \begin{split}
+    q(\theta)
+    =& 
+    \frac{p(\theta | u)}{Z_{q(\theta)}} 
+    \prod_{t,k}
+    \left(
+      \left( 
+      \ifrac{\lambda_{k}}{2\pi} \right)^{1/2}
+      \exp 
+      \left[
+          - \tfrac{1}{2} \Delta_{t,k}^2
+      \right]
+    \right)^{\gamma_{t,k}}\\
+    &
+    \prod_{t=2,k,l}
+    \left(
+      A_{kl}
+    \right)^{\xi_{t,kl}} 
+    \prod_{k}
+    \left(
+      \pi_k
+    \right)^{\gamma_{1,k}}
+  \end{split}
+\end{align}
+Again we see that we can write:
+\begin{align}
+  p^*(x, z, \theta) &= \exp \left[ \ln E_{q(z)}[p(x, z, \theta)] \right]
+\end{align}
+where the integral over $q(z)$ can be expressed through the substitutions
+\begin{align*}
+ z^*_{t,k} &= \gamma_{t,k} \\ 
+ (z_{t-1,k} z_{t,l})^* &= \xi_{t,k,l}
+\end{align*}
+Note also that the following decomposition for $q(\theta)$ holds without further need for approximation:
+\begin{align}
+  q(\theta) 
+  &= q(\mu, \lambda) q(A) q(\pi)
+\end{align}
+This in turn means we can write:
+\begin{align}
+  \begin{split}
+    \label{eq:q_mu_l}
+    q(\mu, \lambda) 
+    =& \ps{x}{z, \mu_{n}, \lambda_{n}} p(\mu, \lambda) \\
+    =& \prod_k \left[\prod_t \p{x_{t}}{\mu_{k}, \lambda_{k}}^{\gamma_{t,k}} \right] 
+        p(\mu_{k}, \lambda_{k}) 
+  \end{split}\\
+  \label{eq:q_A}
+  q(A) &= \ps{z_{2:T}}{z_{1}, A} p(A) \\
+  \label{eq:q_pi}
+  q(\pi) &= \ps{z_{1}}{\pi}
+\end{align}
+This means that the m-step reduces to calculation of a set of \emph{variational} parameters $w$ that determines $q(\theta | w)$ from the \emph{hyperparameters} $u$ that define $p(\theta|u)$ and the sufficient statistics for $\ps{x,z}{\theta}$.
+
+In order to calculated the updates for $\q{\mu,\lambda}{w}$ we will use the fact that the prior and likelihood are exponential family, so that they may be written as:
+\begin{align}
+  \begin{split}
+    \q{\eta}{\tilde{\nu}_{n}, \tilde{\chi}_{n}}
+    = &
+    h \left(\tilde{\nu_{n}}, \tilde{\chi_{n}} \right) 
+    g(\eta)^{\tilde{\nu}_{n}} 
+    \exp \left[ \eta \cdot \tilde{\chi}_{n} \right] \\
+    = &
+    Z_{q(\theta)}^{-1}
+    f(x) g(\eta)
+    \exp \left[ \eta \cdot \upsilon(x_{n}) \right] \\
+    & h \left(\nu_{n}, \chi_{n} \right) 
+    g(\eta)^{\nu_{n}} 
+    \exp \left[ \eta \cdot \chi_{n}  \right] \\
+    = &
+    \tilde{Z}_{q(\theta)}^{-1}
+    g(\eta)^{\nu_{n} + 1} 
+    \exp \left[ \eta \cdot (\chi_{n} + \upsilon(x_{n})) \right] 
+  \end{split}
+\end{align}
+This allows us to rewrite equation (\ref{eq:q_mu_l}) as:
+\begin{align}
+  \q{\eta_{k}}{\tilde{\nu}_{k}, \tilde{\chi}_{k}}
+  =& \tilde{Z}_{q(\theta)}^{-1} 
+      \left[
+        \prod_t
+        \left(
+          g(\eta_{k}) \exp \left[ \eta_{k} \cdot \upsilon(x_{t}) \right]
+        \right)^{\gamma_{t,k}}
+      \right] \\
+     & g(\eta_{k}) \exp \left[ \eta_{k} \cdot \chi_{k} \right]
+\end{align}
+which yields the updates
+\begin{align}
+  \tilde{\nu}_{k} &= \nu_{k} + \sum_t \gamma_{t,k} \\
+  \tilde{\chi}_{k} &= \chi_{k} + \sum_t \gamma_{t,k} \upsilon(x_{t})
+\end{align}
+ We can now substitute 
+\begin{align}
+  \nu &= u^\beta = u^\nu - 1 \\
+  \chi &= \{ -\tfrac{1}{2}(\nu (u^\mu)^2 + 1/u^W) \,,\, \nu u^\mu \} \\
+  \upsilon(x) &= \{-\tfrac{1}{2} x^2, x\} 
+\end{align}
+and define
+\begin{align}
+  N_{k} &= \sum_t \gamma_{t,k} \\
+  \bar{X}_{k} &= \sum_t \gamma_{t,k} x_{t} \\
+  \bar{X^2}_{k} &= \sum_t \gamma_{t,k} x_{t}^2 
+\end{align}
+to obtain the following expressions for the variational parameters $\q{\theta}{w}$:
+\begin{align}
+  w^\mu_{k} =& \tilde{\chi}_{k,2} / \tilde{\nu}_{k} 
+         = (u^\beta_k u^\mu_k + \bar{X}_{k})/(u^\beta_k + N_{k}) \\
+  w^\beta_{k} =& u^{\beta}_k + N_{k} \\
+  w^\nu_{k} =& u^{\nu}_k + N_{k} \\
+  \begin{split}
+    (w^W_{k})^{-1} 
+    =& 
+      - \tilde{\chi}_{k,2} 
+      - \tfrac{1}{2} \tilde{\chi}_{k,2}^2/\tilde{\nu}_{k} \\
+    =&
+    \left(
+      (u^{W}_k)^{-1} + u^\beta_k (u^\mu_k)^2 + \bar{X^2}_{k}
+    \right) \\
+    &- \frac{1}{2}
+      \left(
+      (u^\beta_k u^\mu_k + \bar{X}_{k})^2
+      /(u^\beta_k + N_{k})
+      \right)
+  \end{split}
+\end{align}
+Finally, the updates for $u^A$ and $u^\pi$ can be obtained by substitution of the terms in equation (\ref{eq:q_theta}) into equations (\ref{eq:q_A}) and (\ref{eq:q_pi}):
+\begin{align}
+  w^A_{kl} &= u^A_{kl} + \sum_{t=2}^{T} \xi_{t,kl} \\
+  w^\pi_{k} &= u^\pi_{k} + \gamma_{1,k}
+\end{align}
+
+We now proceed to derive how $\gamma$ and $\xi$ can be calculated using the Forward-backward algorithm.
+
+\section{Forward-Backward Algorithm}
+
+The forward-backward algorithm is a method to calculate expectation values under the posterior $p(z | x, \theta)$, or in our case, the approximate posterior $q(z)$ of a Hidden Markov Model:  
+\begin{align}
+ \gamma_{t,k} 
+  &= E_{q(z)} [z_{t,k}] 
+   = \ps{x_1}{z_1} p^*(z_1) \\
+ \xi_{t,kl} 
+  &= E_{q(z)} [z_{t-1,k} z_{t,l}]
+   = \ps{z_{t-1}=k, z_{t-1}=l}{x_{1:T}} 
+\end{align}
+to do so we calculate two variables:
+\begin{align}
+ \alpha_{t,k} &= p^*(x_{1:t}, z_t=k) \\
+ \beta_{t,k} &= \ps{z_t=k}{x_{t+1:T}}
+\end{align}
+such that
+\begin{align}
+  \gamma_{t,k} &= \ps{z_t=k}{x_{1:T}}
+                = \frac{\alpha_{t,k} \beta_{t,k}}{p^*(x_{1:T})} \\
+  \xi_{t,k,l} &= \ps{z_{t-1}=k, z_{t-1}=l}{x_{1:T}} \\
+              &= \frac{\ps{x_{1:T}}{z_t, z_{t-1}} p^*(z_t, z_{t-1})}{p^*(x_{1:T})}
+               = \frac{\beta_{t,l} \ps{x_t}{z_t=l} A_{kl} \alpha_{t-1,k} }{p^*(x_{1:T})}
+\end{align}
+and exploit the following recursive relationships:
+\begin{align}
+  \begin{split}
+    \alpha_{t,k} &= p^*(x_{1:t}, z_t) \\
+                  &= \sum_l \ps{x_t}{z_t=k} \ps{z_t=k}{z_{t-1}=l} p^*(x_{1:t-1}, z_{t-1}=l) \\ 
+                  &= \sum_l \ps{x_t}{z_t=k} A^*_{lk} \alpha_{t-1,l}
+  \end{split}\\ 
+  \begin{split}
+    \beta_{t,k} &= \ps{x_{t+1:T}}{z_t} \\
+                &= \sum_l  \ps{x_{t+2:T}}{z_{t+1}=l} \ps{x_{t+1}}{z_{t+1}=l} \ps{z_{t+1}=l}{z_{t}=k}\\ 
+                &= \sum_l  \beta_{t+1,l} \ps{x_{t+1}}{z_{t+1}=l} A^*_{kl} 
+  \end{split} 
+\end{align}
+We can now loop \emph{forward} in time to recursively calculate $\alpha_t$ from $\alpha_{t-1}$ and backward in time to calculate $\beta_t$ from $\beta_{t+1}$. The boundary conditions on these passes are:
+\begin{align}
+  \alpha_{1,k} &= p^*(x_1, z_1) = \ps{x_1}{z_1} p^*(z_1) =  \prod_k \ps{x_1}{z_1=k} \pi^*_k \\
+  \beta_{T,k} &= 1
+\end{align}
+In practice, it proves more convenient to calculate a normalized version of $\hat{\alpha}$ and $\hat{\beta}$. To do so, we introduce a set of scaling factors $c_t$:
+\begin{align}
+  \begin{split}
+    c_t &= \ps{x_t}{x_{1:t-1}}
+  \end{split} 
+\end{align}
+such that normalized forward and backward variables can be defined as:
+\begin{align}
+  \begin{split}
+    \hat{\alpha}_{t,k} &= \frac{\alpha_{t,k}}{p^*(x_{1:t})} 
+                        = \prod_{t'=1}^t \frac{1}{c_{t'}} \alpha_{t,k}  \\
+    \hat{\beta}_{t,k} &= \frac{\beta_{t,k}}{\ps{x_{t+1:T}}{x_{1:t}}} 
+                        = \prod_{t'=t+1}^T \frac{1}{c_{t'}} \beta_{t,k} 
+  \end{split}
+\end{align}
+This choice of normalization implies:
+\begin{align}
+  \begin{split}
+    \gamma_{t,k}
+    &=
+    \frac{\alpha_{t,k}\beta_{t,k}}{p^*(x_{1:T})} 
+    = \frac{\alpha_{t,k}\beta_{t,k}}{\ps{x_{t+1:T}}{x_{1:t}} p^*(x_{1:t})} 
+    = \hat{\alpha}_{t,k} \hat{\beta}_{t,k} 
+  \end{split}\\
+  \begin{split}
+    \xi_{t,k,l}
+      &= \frac{\beta_{t,l} \ps{x_t}{z_t=l} A_{kl} \alpha_{t-1,k} }{p^*(x_{1:T})} 
+      = \frac{c_t \hat{\beta}_{t,l} \ps{x_t}{z_t=l} A_{kl} \hat{\alpha}_{t-1,k} }{p^*(x_{1:T})}
+  \end{split}
+ \end{align}
+The following recursion relations hold for $\hat{\alpha}$ and $\hat{\beta}$:
+\begin{align}
+  \begin{split}
+    c_t \hat{\alpha}_{t,k}  
+    &= \sum_l \ps{x_t}{z_t=k} A^*_{lk} \hat{\alpha}_{t-1,l}
+  \end{split}\\ 
+  \begin{split}
+    c_{t+1} \beta_{t,k} 
+    &= \sum_l \hat{\beta}_{t+1,l} \ps{x_{t+1}}{z_{t+1}=l} A^*_{kl} 
+  \end{split} 
+\end{align}
+We can now solve for $c_t$ from the recursion relation for $\hat{\alpha}$ using that $\sum_k \hat{\alpha}_{t,k} = 1$:
+\begin{align}
+  \begin{split}
+    c_t 
+    &=
+    c_t
+    \sum_k
+    \hat{\alpha}_{t,k}  
+    = 
+    \sum_{k,l} \ps{x_t}{z_t=k} A^*_{lk} \alpha_{t-1,l}
+  \end{split} 
+\end{align}
+So the scale factors $c_t$ are nothing but the normalization constant for $\hat{\alpha}_t$ and can therefore essentially be obtained for free during the forward pass. Note that these also give us an estimate for $p^*(x)$:
+\begin{align}
+   p^*(x) &= p^*(x_{1:t}) = \prod_t c_t
+\end{align}
+which gives us the normalization constant for $q(z)$
+\begin{align}
+   \hat{Z}_{q(z)} &= \ln p^*(x) = \sum_t \ln c_t
+\end{align}
+
+
+\section{Calculation of the Evidence}
+
+The last thing that remains is to calculate the lower bound so we can check for convergence.
+\begin{align}
+  \begin{split}
+  \L[q(z), q(\theta)]
+    &=
+    \sum 
+    \int \d{\theta }
+    \sum_{z }  
+    q(z ) q(\theta )
+    \ln
+    \left[
+      \frac{p(x , z , \theta )}
+            {q(z ) q(\theta )}  
+    \right] \\  
+  \end{split}
+\end{align}
+We can decompose the terms in this equation as:
+\begin{align}
+  \begin{split}
+  \L[q(z), q(\theta)]
+    =
+    \sum &
+    E_{q(z )q(\theta )}
+    \left[
+      \ln \p{x , z }{\theta }
+    \right] \\
+    & + 
+    D_{KL}[q(\theta ) | p(\theta )]
+    -
+    E_{q(z )}
+    \left[
+      \ln q(z )
+    \right]  
+  \end{split}
+\end{align}
+Now note from equation (\ref{eq:q_z_star}) that $E_{q(z )} \left[ \ln q(z ) \right]$ can   
+be written as:
+\begin{align}
+  E_{q(z )} \left[ \ln q(z ) \right]
+  &=
+  E_{q(z )q(\theta )}[\ln \p{x , z }{\theta }] - \ln \hat{Z}_{q(z )}
+\end{align}
+So
+\begin{align}
+  \begin{split}
+  \L[q(z), q(\theta)]
+    = &
+    \sum 
+    \ln \hat{Z}_{q(z )} + D_{KL}[q(\theta ) \,||\, p(\theta )]
+  \end{split}
+\end{align}
+The term $\ln \hat{Z}_{q(z )}$ is obtained from the forward backward algorithm. The Kullback-Leibler divergence between $q(\theta)$ and $p(\theta)$ decomposes into: 
+\begin{align}
+  \begin{split}
+    D_{KL}[q(\theta ) \,||\, p(\theta )]
+    =
+    \sum_k & D_{KL}[q(\mu_k,\lambda_k) \,||\, p(\mu_k,\lambda_k)] \\
+    & +
+    D_{KL}[q(A) \,||\, p(A)]
+    +
+    D_{KL}[q(\pi) \,||\, p(\pi)]
+  \end{split}
+\end{align}
+The expression for the $D_{KL}$ of a Gaussian-Wishart distribution is a bit painful, but can be obtained from Bishop equations (10.74) and (10.77).
+\begin{align}
+    D_{KL}[q(\mu_k,\lambda_k) \,||\, p(\mu_k,\lambda_k)]
+    = & E_{q(\mu_k,\lambda_k)}[p(\mu_k,\lambda_k)]
+        - E_{q(\mu_k,\lambda_k)}[q(\mu_k,\lambda_k)] 
+\end{align}
+which expands to
+\begin{align}
+  \begin{split}
+    E_{q(\mu_k,\lambda_k)}[p(\mu_k,\lambda_k)]
+    = &
+    \frac{1}{2}
+    \left[ 
+      \ln \left( \frac{u^\beta_k}{2\pi} \right)
+      +
+      \ln \lambda^*_k
+      - 
+      \frac{u^\beta_k}{w^\beta_k} 
+      +
+      u^\beta_k u^\nu_k w^W_k (w^\mu_k - u^\mu_k)^2
+    \right]
+  \end{split}\\
+  \begin{split}
+    E_{q(\mu_k,\lambda_k)}[q(\mu_k,\lambda_k)]
+    = &
+    \frac{1}{2}
+    \left[ 
+      \ln \left( \frac{u^\beta_k}{2\pi} \right)
+      +
+      \ln \lambda^*_k
+      - 
+      1
+      -
+      H[\lambda_k]
+    \right]
+  \end{split}
+\end{align}
+with
+\begin{align}
+  H[\lambda_k]
+  &= - \ln \left[(2/u^W_k)^{u^\nu_k / 2} \Gamma(w^\nu_k/2)\right] - \frac{w^\nu_k - 2}{2} \ln w^\nu_k w^W_k + \frac{w^\nu}{2}
+\end{align}
+The KL divergences for $A$ and $\pi$ have simple closed-form expressions:
+\begin{align}
+  D_{KL}[q(A_k) \,||\, p(A_k)]
+  =& \sum_l [w^A_{k,l} - u^a_{k,l}] [\psi(w^A_{k,l}) - \psi(u^A_{k,l})]\\
+  D_{KL}[q(\pi) \,||\, p(\pi)]
+  =& \sum_l [w^\pi_l - u^\pi_l] [\psi(w^\pi_l) - \psi(u^\pi_l)]
+\end{align}
+
+\chapter{Hierarchical Updates (Empirical Bayes)}
+
+In the hierarchical step we maximize the summed lower bound log-evidence with respect to the ensemble distribution $\p{\theta}{u}$. This step can be understood as a type of Emperical Bayes method. 
+
+In the more general case of Empirical Bayes, one would introduce a prior $p(u)$, and run alternating variational updates to find (approximations) of the posteriors $\p{\theta}{x}$ and $\p{u}{x}$:
+\begin{align}
+  \p{z,\theta}{x}
+  &=
+  \frac{\p{x}{z,\theta}}{p(x)} \int \d u \p{z}{\theta}\p{\theta}{u} p(u) \\
+  \p{u}{x}
+  &=
+  \frac{p(u)}{p(x)} \sum_z \int \d \theta \p{x}{z, \theta} \p{z}{\theta} \p{\theta}{u}
+\end{align}
+Of course, calculation of the hierarchical generalization of the evidence $p(x)$ would require an additional integral:
+\begin{align}
+  p(x)
+  &=
+  \int \d u \p{x}{u} p(u)
+\end{align}
+One could now in principle attempt to construct a variational approach in terms of 3 distributions $q(z), q(\theta), q(u)$, that minimizes a lower bound on the log hierarchical evidence $\log p(x)$. However, this would be a lot of pain, for not so much gain.
+
+A simpler approach is to construct an EM algorithm to obtain a point estimate for $u$. The quantity optimized is the summed lower bound log evidence over the ensemble:
+\begin{align}
+  \log \p{x}{u} &\simeq \sum_n \L_n
+\end{align}
+The E-step amounts to running VBEM on every trace to construct:
+\begin{align}
+ \q{\theta}{w} &= \prod_n \q{\theta}{w_n} \simeq \p{\theta}{x, u}
+\end{align}
+Whereas the M-step maximizes the summed lower bound w.r.t. $u$:
+\begin{align}
+  0 &= \pdff{}{u} \sum_n \L_n \\
+    &= \pdff{}{u} \sum_n \int \d{\theta_n} \q{\theta_n}{w_n} \log \p{\theta_n}{u} \\
+    &= \sum_n \int \d{\theta_n} 
+        \q{\theta_n}{w_n} \frac{\partial_u \p{\theta_n}{u}}{\p{\theta_n}{u}}
+       \label{eq:u_maximization}
+\end{align}
+Now note that $p(\theta)$ factorizes without need for further approximation
+\begin{align}
+ \p{\theta}{u} = \p{\mu,\lambda}{u^\mu, u^\beta, u^W, u^\nu} \p{A}{u^A} \p{\pi}{u^\pi}
+\end{align}
+so the updates for each factor can be computed separatedly. 
+
+\section{Conjugate-Exponential Form}
+
+If we rewrite $\p{\theta}{u}$ to its conjugate exponential form $\p{\eta}{\nu,\chi}$, the expression in equation \ref{eq:u_maximization} takes the form:
+\begin{align}
+    0
+    &= 
+    \sum_n \int \d{\eta_n} 
+        \q{\eta_n}{\nu_n, \chi_n} 
+        \frac{\partial_{\nu,\chi} \p{\eta_n}{\nu, \chi}}
+             {\p{\eta_n}{\nu,\chi}}
+       \label{eq:u_max_ce}
+\end{align}
+Here we adopt the convention where $\{\nu,\chi\}$ are taken to signify the hyperparameters of the ensemble distribution, whereas $\{\nu_n, \chi_n\}$ denotes the set of variational parameters for the approximate posterior of each trace. 
+
+The derivatives of $\p{\eta}{\nu,\chi}$ with respect to the hyperparameters are given by:
+\begin{align}
+    \pdff{\p{\eta}{\nu,\chi}}{\nu}
+    &=
+    \left[
+      \frac{\partial_\nu h(\nu,\chi)}{h(\nu,\chi)}
+      +
+      \ln g(\eta) 
+    \right]
+    \p{\eta}{\nu,\chi}
+    \\
+    \nabla_\chi \p{\eta}{\nu,\chi}
+    &=
+    \left[
+      \frac{\nabla_\chi h(\nu,\chi)}{h(\nu,\chi)}
+      +
+      \eta 
+    \right]
+    \p{\eta}{\nu,\chi}
+\end{align}
+If we now substitute these expressions in equation \ref{eq:u_max_ce}, we obtain the expressions:
+\begin{align}
+  0
+  &=
+  \pdff{}{\nu} \sum_n \L_n
+  = 
+  \sum_n 
+   E_{q(\eta_n)}
+   \left[
+      \frac{\partial_\nu h(\nu,\chi)}{h(\nu,\chi)}
+      +
+      \ln g(\eta) 
+   \right]
+   = 
+\end{align}
+Given that terms containing $h(\nu,\chi)$ have no dependence on $\eta$ we can rewrite these equalities as:
+\begin{align}
+   E_{q(\eta)}
+   \left[
+     \ln g(\eta)
+   \right]
+   &=
+   \frac{1}{N}
+   \sum_n
+   E_{q(\eta_n)}
+   \left[
+     \ln g(\eta)
+   \right] \\
+   &=
+   -\frac{\partial_\nu h(\nu,\chi)}{h(\nu,\chi)}
+   \\
+   E_{q(\eta)}
+   \left[
+     \eta
+   \right]
+   &=
+   \frac{1}{N}
+   \sum_n
+   E_{q(\eta_n)}
+   \left[
+     \eta
+   \right] \\
+   &=
+   -\frac{\nabla_\chi h(\nu,\chi)}{h(\nu,\chi)}
+\end{align}
+These equations implicitly specify the update conditions for the hyperparameters in terms of the averaged expectation values of $\eta$ and $\ln g(\eta)$ under the approximate posterior for each trace.
+
+The expectation values for $\ln g(\eta)$ and $\eta$ can be computed by noting that the integral of a probability density function must always equal to 1, implying that it's derivatives w.r.t. $\nu$ and $\chi$ must be zero:
+\begin{align}
+  0
+  &=
+  \pdff{}{\nu_n}
+  \int \d{\eta_n}
+  \q{\eta_n}{\nu_n, \chi_n}
+  =
+  \frac{\partial_{\nu_n} h(\nu_n, \chi_n)}
+       {h(\nu_n, \chi_n)}
+  +
+  E_{q(\theta_n)} [ \ln g(\eta_n) ] 
+  \\
+  0
+  &=
+  \nabla_{\chi_n}
+  \int \d{\eta_n}
+  \q{\eta_n}{\nu_n, \chi_n}
+  =
+  \frac{\nabla_{\chi_n} h(\nu_n, \chi_n)}
+       {h(\nu_n, \chi_n)}
+  +
+  E_{q(\theta_n)} [\eta_n] 
+\end{align}
+So the logarithmic derivates of $h(\nu, \chi)$ in fact gives us the required expectation values, and the equations for the hyperparameter updates are in fact equivalent to the expressions:
+\begin{align}
+   E_{p(\eta)}
+   \left[
+     \ln g(\eta)
+   \right]
+   &=
+   E_{q(\eta)}
+   \left[
+     \ln g(\eta)
+   \right]
+   \\
+   E_{p(\eta)}
+   \left[
+     \eta
+   \right]
+   &=
+   E_{q(\eta)}
+   \left[
+     \eta
+   \right]
+\end{align}
+or
+\begin{align}
+   \frac{\partial_\nu h(\nu,\chi)}{h(\nu,\chi)}
+   &=
+   \frac{1}{N}
+   \sum_n
+   \frac{\partial_{\nu_n} h(\nu_n,\chi_n)}{h(\nu_n,\chi_n)}
+   \\ 
+   \frac{\nabla_\chi h(\nu,\chi)}{h(\nu,\chi)}
+   &= 
+   \frac{1}{N}
+   \sum_n
+   \frac{\nabla_{\chi_n} h(\nu_n,\chi_n)}{h(\nu_n,\chi_n)}
+\end{align}
+
+\section{Emission Distribution (Normal-Wishart)}
+
+For a 1-dimensional Normal-Wishart distribution the conjugate-exponential representation (section \ref{ssec:conj-exp-norm-wish}) takes the form:
+\begin{align}
+  \eta &= \{ \lambda, \lambda \mu \} \\
+  \nu &= u^\beta = u^\nu - 1 \\
+  \chi &= \{ -\tfrac{1}{2}(u^\beta (u^\mu)^2 + 1/u^W), u^\beta u^\mu \} \\
+  g(\eta) &= (\eta_1 / 2\pi)^{1/2} \exp [-\eta_2^2 / 2 \eta_1] \\
+  h(\nu, \chi) &= (2 \pi)^{(\nu-1)/2}  \nu^{1/2}  (-\chi_1 - \chi_2^2/\nu)^{(\nu+1)/2}
+\end{align}
+The expressions for the expectation values of $\ln g$ and $\eta$ become:
+\begin{align}
+  E_{q(\theta_n)} [ \ln g ] 
+  &=
+  - \frac{1}{2} [ 1 / w_n^{\beta} +  w_n^\nu w_n^W (w_n^\mu)^2
+                   + \log(\pi / w_n^W) - \psi(w_n^\nu/2) ] \\
+  E_{q(\theta_n)} [ \lambda ]
+  &=
+  w_n^\nu w_n^W \\
+  E_{q(\theta_n)} [ \lambda \mu ]
+  &=
+  w_n^\nu w_n^W w_n^\mu
+\end{align}
+We now obtain the following updates for $u^\mu$ and $u^W$:
+\begin{align}
+  u^\mu &= E_{q(\theta)} [ \lambda \mu ] / E_{q(\theta)} [ \lambda ] \\
+  u^W &= E_{q(\theta)} [ \lambda ] / u^\nu \\
+\end{align}
+And an implicit expression for for $\nu = u^\beta = u^\nu -1$ that must be solved numerically:
+\begin{align}
+    - \frac{1}{2} 
+    \left[ 
+      \frac{1}{u^\nu -1}
+      +  \frac{E_{q(\theta)} [ \lambda \mu ]^2}{E_{q(\theta)} [ \lambda ]}
+      + \log \left(
+               \frac{\pi u^\nu}{E_{q(\theta)} [ \lambda ]}
+             \right)
+      - \psi(u^\nu/2) 
+    \right] 
+    &=
+    \frac{1}{N} \sum_n E_{q(\theta_n)} [\ln g] 
+\end{align}
+
+\section{Inital State and Transition Probabilities (Dirichlet)}
+
+For a Dirichlet distribution the conjugate exponential forms (section \ref{ssec:conj-exp-dir}) are given by:
+\begin{align}
+  \eta &= \{ \ln \pi_k \} \\
+  \chi &= \{ u^\pi_k \} \\
+  h(\chi) &= \frac{\prod_k \Gamma(\chi_k+1)}{\Gamma(\sum_k (\chi_k + 1))}
+\end{align}
+And the log expectation value of $\eta$ is:
+\begin{align}
+ E_{q(\theta_n)} [ \eta ] &= E_{q(\theta_n)} [ \ln \pi ] = \psi(w^\pi_{n,k}) - \psi(\sum_k w^\pi_{n,k})
+\end{align}
+which again leads to a coupled set of implicit equations that must be solved numerically: 
+\begin{align}
+  \psi(u^\pi_{k}) - \psi(\sum_k u^\pi_{k}) 
+  &= 
+  \frac{1}{N} \sum_n
+  \psi(w^\pi_{n,k}) - \psi(\sum_k w^\pi_{n,k})
+\end{align}
+The updates for each row of the transition matrix are performed in the same manner   
+\begin{align}
+  \psi(u^A_{kl}) - \psi(\sum_l u^A_{kl}) 
+  &= 
+  \frac{1}{N} \sum_n
+  \psi(w^A_{n,kl}) - \psi(\sum_l w^A_{n,kl})
+\end{align}
+
+\section{Mixtures of Priors}
+
+The empirical Bayes approach admits a straightforward generalization to inference over mixtures of ensemble distributions. Suppose that a latent state $y = {1 \ldots M}$ encodes the membership of each trace with respect to a set of M sub-populations in the ensemble, which have different parameter distributions $\p{\theta | u_m}$. The evidence can now be expressed as a marginal over $y$:
+\begin{align}
+ \p{x}{u} 
+ &= \sum_y \p{x}{u,y} p(y) \\
+ &= \sum_m \p{x}{u_m} p(y=m) \\
+ &\geq \sum_{n,m} \exp(\L_{nm}) p(y=m) 
+\end{align}
+where $\L_{nm} \geq \log \p{x_n}{u_m}$ is the lower bound log evidence for trace $n$ with respect to mixture component $m$.
+
+An expectation maximization algorithm over this mixture can be now be constructed by introducing a variational posterior $q(y_n \!=\! m) = \omega_{nm}$ for each trace. The corresponding (approximate) E-step is now given by:
+\begin{align}
+  q^{(i+1)}(y_n \!=\! m) 
+  &=
+  \frac{\exp(\L_{nm}) p^{(i)}(y \!=\! m)}{\sum_l \exp(\L_{nl}) p^{(i)}(y \!=\! l)}        
+  = \omega^{(i+1)}_{nm}
+\end{align}
+And the M-step simply becomes:
+\begin{align}
+  p^{(i+1)}(y = m)
+  &=
+  \frac{1}{N} \sum_n q^{(i+1)}(y_n = m)
+\end{align}
+The mixed version of the hierarchical algorithm now maximizes the lower bound
+\begin{align}
+ \log \p{x}{u}
+ &\geq
+ \sum_{n} \sum_{y_n} q(y_n) \log \left[ \frac{\p{x_n}{u, y_n}}{q(y_n)} \right]\\
+ &\geq
+ \sum_{n,m} \omega_{nm} \left[ \L_{nm} -  \log \omega_{nm} \right] \\
+ &=
+ \L
+\end{align}
+and the hierarchical update for the $m$-th subpopulation becomes equivalent solving of the equations  
+\begin{align}
+ 0
+ &=
+ \sum_{n,m} \omega_{nm} \pdff{\L_{nm}}{u_m}
+\end{align}
+which produces a set of update equations analogous to the single-population case, where the expectation values with respect to the approximate posteriors are now weighted by $\omega$:
+\begin{align}
+ E_{\p{\theta}{u_m}} [ \ln g ]
+ &= 
+ \frac{1}{\sum_n \omega_{nm}} \sum_n \omega_{nm} E_{\q{\theta_n}{w_{nm}}} [ \ln g ] \\
+ E_{\p{\theta}{u_m}} [ \eta ]
+ &= 
+ \frac{1}{\sum_n \omega_{nm}} \sum_n \omega_{nm} E_{\q{\theta_n}{w_{nm}}} [ \eta ]
+\end{align}
+
+
+\end{document}

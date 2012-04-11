@@ -1,0 +1,48 @@
+\documentclass[a4paper,fleqn,10pt,openright,oldfontcommands, article]{memoir}    
+%\documentclass[10pt,fleqn]{letter}    
+\usepackage{amsmath}
+%\usepackage[minionint,textosf,mathlf]{MinionPro}
+\usepackage[english]{babel}
+\usepackage{graphicx}
+
+% pagesetup
+\pagestyle{plain}
+
+% symbols
+\renewcommand{\L}{\ensuremath{\mathcal{L}}}
+\newcommand{\pd}{\partial}
+\newcommand{\dg}{\dagger}
+\newcommand{\T}{\top}
+
+% math notation
+\newcommand{\pdff}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\fdff}[2]{\frac{\delta #1}{\delta #2}}
+\newcommand{\ifrac}[2]{#1 / #2}
+\newcommand{\abs}[1]{\left\vert #1 \right\vert}
+\newcommand{\ten}[1]{\underline{\underline{#1}}}
+\newcommand{\p}[2]{\ensuremath{p(#1 \:|\: #2)}}
+ \renewcommand{\d}[1]{\ensuremath{\!\!d#1 \:}}
+
+% condensed +/-
+\newcommand{\mm}{\ensuremath{\!-\!}}
+\newcommand{\pp}{\ensuremath{\!+\!}}
+\newcommand{\ee}{\ensuremath{\!=\!}}
+
+% lengths
+\setlength{\mathindent}{18pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+% section headings
+%\chapterstyle{article}
+%\setsecnumdepth{subsection}
+%\setcounter{maxsecnumdepth}{0}
+%\setcounter{minsecnumdepth}{1}
+%\setcounter{maxsecnumdepth}{1}
+
+%\setsecnumformat{\llap{\csname the#1\endcsname\hspace{\baselineskip}}}
+
+\setsecheadstyle{\large\bfseries}
+% \setsecheadstyle{\sscshape\raggedright\MakeLowercase}
+\setbeforesecskip{5pt plus 2pt minus 2pt}
+\setaftersecskip{5pt plus 2pt minus 2pt}
