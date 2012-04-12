@@ -171,13 +171,14 @@ while ~converged
         % on subsequent iterations, the result from the previous
         % iteration is used in the fist restart
 
+        if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
+            fprintf('hmi: %d states, it %d, initializing w\n', K, it)
+        end
+
         % are we doing soft kmeans?
         soft_kmeans = isequal(args.soft_kmeans, 'always') | ((it == 1) & isequal(args.soft_kmeans, 'init'));
 
         if (it == 1)
-            if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-                fprintf('hmi: %d states, it %d, init\n', K, 0)
-            end
             switch length(args.w0(:))
                 case N*M
                     [w0(:, :, 1)] =  args.w0;
@@ -216,6 +217,10 @@ while ~converged
         w0(:, :, 1) = w(it-1, :, :);
     end
 
+    if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
+        fprintf('hmi: %d states, it %d, running VBEM\n', K, it)
+    end
+
     % run vbem on each trace 
     L(it,:,:) = -Inf * ones(N, M);
     for n = 1:N
@@ -231,6 +236,7 @@ while ~converged
                 if L_(end) > L(it, n, m)
                     w(it, n, m) = w_;
                     L(it, n, m) = L_(end);
+                    restart(n, m) = r;
                 end
             end
         end
@@ -246,7 +252,8 @@ while ~converged
     sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
 
     if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
-        fprintf('hmi: %d, L: %e, rel increase: %.2e\n', it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it));
+        fprintf('hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
+                K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
     end    
 
     % check for convergence
@@ -270,7 +277,8 @@ end
 for n = 1:N
     for m = 1:M
         vb(n,m) = struct('w', w(it,n,m), ...
-                         'L', L(it,n,m));
+                         'L', L(it,n,m), ...
+                         'restart', restart(n,m));
     end
 end
 
