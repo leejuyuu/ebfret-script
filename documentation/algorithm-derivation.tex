@@ -60,9 +60,9 @@
 \section{Emissions model}
 \begin{align}
   \begin{split}
-  \p{x_n}{z_n, \theta_n} &= \prod_{n} \sum_{z_n} \prod_t 
+  \p{x_n}{z_n, \theta_n} &= \prod_t 
                             \p{x_{n,t}}{z_{n,t} \,,\, \theta_{n}} \\
-                         &= \prod_{n} \sum_{z_n} \prod_t \prod_k 
+                         &= \prod_t \prod_k 
                             \p{x_{n,t}}{\theta_{n,k}}^{z_{n,t,k}}
   \end{split}\\
   \begin{split}
