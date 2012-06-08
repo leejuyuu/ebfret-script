@@ -249,8 +249,6 @@ try
         omega(it).gamma = normalize(bsxfun(@times, exp(L0), omega(it).pi'), 2);
         omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
 
-        fprintf(2, '[debug] mean(omega(it).gamma, 1), std(omega(it).gamma, 1): %.2f, %.2f\n', mean(omega(it).gamma, 1), std(omega(it).gamma, 1));
-
         % calculate summed evidence
         sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
 
