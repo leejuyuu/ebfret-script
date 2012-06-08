@@ -197,8 +197,8 @@ while ~converged
                     end
             end
         else
-            % use value from previous iteration
-            w0(n, m, 1) = w(it-1, n, m);
+            % use values from previous iteration
+            w0(:, :, 1) = w(it-1, :, :);
         end
 
         % additional restarts use a randomized guess for the
