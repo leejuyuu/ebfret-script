@@ -229,7 +229,7 @@ try
         L(it,:,:) = -Inf * ones(N, M);
         for n = 1:N
             if strcmpi(args.display, 'trace')
-                fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', 
+                fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', ...
                          datestr(now, 'yymmdd HH.MM'), K, it, n, N);
             end 
             % loop over prior mixture components
