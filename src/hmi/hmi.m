@@ -173,7 +173,8 @@ try
             % iteration is used in the fist restart
 
             if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-                fprintf('hmi: %d states, it %d, initializing w\n', K, it)
+                fprintf('[%s] hmi: %d states, it %d, initializing w\n', ...
+                         datestr(now, 'yymmdd HH.MM'), K, it)
             end
 
             % are we doing soft kmeans?
@@ -190,7 +191,8 @@ try
                     otherwise
                         for n = 1:N
                             if strcmpi(args.display, 'trace')
-                                fprintf('hmi: %d states, it %d, trace %d of %d\n', K, 0, n, N);
+                                fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', ...
+                                         datestr(now, 'yymmdd HH.MM'), K, 0, n, N);
                             end    
                             for m = 1:M
                                 w0(n, m, 1) =  init_w(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
@@ -219,14 +221,16 @@ try
         end
 
         if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-            fprintf('hmi: %d states, it %d, running VBEM\n', K, it)
+            fprintf('[%s] hmi: %d states, it %d, running VBEM\n', ...
+                     datestr(now, 'yymmdd HH.MM'), K, it)
         end
 
         % run vbem on each trace 
         L(it,:,:) = -Inf * ones(N, M);
         for n = 1:N
             if strcmpi(args.display, 'trace')
-                fprintf('hmi: %d states, it %d, trace %d of %d\n', K, it, n, N);
+                fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', 
+                         datestr(now, 'yymmdd HH.MM'), K, it, n, N);
             end 
             % loop over prior mixture components
             for m = 1:M
@@ -253,8 +257,8 @@ try
         sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
 
         if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
-            fprintf('hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
-                    K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
+            fprintf('[%s], hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
+                    datestr(now, 'yymmdd HH.MM'), K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
         end    
 
         % check for convergence
