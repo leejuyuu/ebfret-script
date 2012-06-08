@@ -15,6 +15,13 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     % restarts : int
     %   Number of HMI restarts to perform
     %
+    % u0 : (1xR) struct (optional)
+    %   Initial guess for hyperparameters to use for first restart
+    %   of each run
+    %
+    % w0 : (N x R) struct (optional)
+    %   Initial guess for posterior parameters to use for 
+    %   first restart of each run
     %
     % Variable Inputs
     % ---------------
@@ -65,7 +72,9 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     ip.StructExpand = true;
     ip.addRequired('x', @iscell);
     ip.addRequired('K_values', @isnumeric);
-    ip.addRequired('restarts', @isscalar);
+    ip.addOptional('restarts', 1, @isscalar);
+    ip.addOptional('u0', struct(), @(u) isstruct(u) & isfield(u, 'mu'));
+    ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'mu'));
     ip.addParamValue('u0_strength', 0.1, @isscalar);
     ip.addParamValue('num_cpu', 1, @isscalar);
     ip.addParamValue('hmi', struct(), @isstruct);
@@ -94,7 +103,7 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
         end
     end
 
-    % try
+    try
         % calculate counts to assign to prior
         u0_counts = opts.u0_strength * mean(cellfun(@length, x));
 
@@ -110,11 +119,16 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
                             / (opts.K_values(k) - 1);
             end
             for r = 1:opts.restarts
-                if K >1
-                    u0(k, r) = init_u(K, 'mu_sep', sep_range(r), ...
-                                      'mu_counts', u0_counts);
+                if r == 1 & isfield(opts.u0, 'mu')
+                    % use supplied hyperparameters for first restart
+                    u0(k, r) = opts.u0(k);
                 else
-                    u0(k, r) = init_u(K, 'mu_counts', u0_counts);
+                    if K >1
+                        u0(k, r) = init_u(K, 'mu_sep', sep_range(r), ...
+                                         'mu_counts', u0_counts);
+                    else
+                        u0(k, r) = init_u(K, 'mu_counts', u0_counts);
+                    end
                 end
             end
         end
@@ -125,9 +139,13 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
             rn = cell(opts.restarts, 1);
             for r = 1:opts.restarts
                 rn{r} = struct();
-                [rn{r}.u, rn{r}.L, rn{r}.vb, rn{r}.vit] = ...
-                    hmi(x, u0(k,r), opts.hmi, 'vbem', opts.vbem);
-                
+                if r == 1 & isfield(opts.w0, 'mu')
+                    [rn{r}.u, rn{r}.L, rn{r}.vb, rn{r}.vit] = ...
+                        hmi(x, u0(k,r), opts.w0(:,k), opts.hmi, 'vbem', opts.vbem);
+                else
+                    [rn{r}.u, rn{r}.L, rn{r}.vb, rn{r}.vit] = ...
+                         hmi(x, u0(k,r), opts.hmi, 'vbem', opts.vbem);
+                end
                 rn{r}.K = opts.K_values(k);
                 rn{r}.u0 = u0(k, r);
             end
@@ -141,16 +159,16 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
         kdxs = bsxfun(@eq, L, max(L, [], 2)) * (1:opts.restarts)';
         rdxs = (kdxs-1) * length(opts.K_values) + (1:length(opts.K_values))';
         runs = runs(rdxs);
-    % catch ME
-    %     % ok something went wrong here, so dump workspace to disk for inspection
-    %     day_time =  datestr(now, 'yymmdd-HH.MM');
-    %     save_name = sprintf('crashdump-hmi_fret-%s.mat', day_time);
-    %     save(save_name);
+    catch ME
+        % ok something went wrong here, so dump workspace to disk for inspection
+        day_time =  datestr(now, 'yymmdd-HH.MM');
+        save_name = sprintf('crashdump-hmi_fret-%s.mat', day_time);
+        save(save_name);
 
-    %     % close matlabpool if necessary
-    %     if opts.num_cpu > 1
-    %         matlabpool('CLOSE');
-    %     end
+        % close matlabpool if necessary
+        if opts.num_cpu > 1
+            matlabpool('CLOSE');
+        end
 
-    %     throw(ME);
-    % end
+        rethrow(ME);
+    end

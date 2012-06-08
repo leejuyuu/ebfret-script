@@ -143,153 +143,164 @@ ip.addParamValue('display', 'off', ...
 ip.addParamValue('vbem', struct(), @isstruct);
 ip.parse(data, u0, w0, varargin{:});
 
-% collect inputs
-args = ip.Results;
-data = args.data;
-u0 = args.u0;
+try
+    % collect inputs
+    args = ip.Results;
+    data = args.data;
+    u0 = args.u0;
 
-% get dimensions
-N = length(data);
-M = length(u0);
-K = length(u0(1).pi);
+    % get dimensions
+    N = length(data);
+    M = length(u0);
+    K = length(u0(1).pi);
 
-converged = false;
-it = 1;
-u(it, :) = u0;
-clear w0;
+    converged = false;
+    it = 1;
+    u(it, :) = u0;
+    clear w0;
 
-% main loop for hierarchical inference process
-omega.pi = ones(M,1) ./ M;
-while ~converged
-    % initialize guesses for w    
-    if (it == 1) | strcmpi(args.do_restarts, 'always')
-        R = args.restarts;
-        % on first iteration, initial values for w are either 
-        % supplied as arguments, or inferred by running a gaussian
-        % mixture model on the data
-        %
-        % on subsequent iterations, the result from the previous
-        % iteration is used in the fist restart
+    % main loop for hierarchical inference process
+    omega.pi = ones(M,1) ./ M;
+    while ~converged
+        % initialize guesses for w    
+        if (it == 1) | strcmpi(args.do_restarts, 'always')
+            R = args.restarts;
+            % on first iteration, initial values for w are either 
+            % supplied as arguments, or inferred by running a gaussian
+            % mixture model on the data
+            %
+            % on subsequent iterations, the result from the previous
+            % iteration is used in the fist restart
 
-        if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-            fprintf('hmi: %d states, it %d, initializing w\n', K, it)
-        end
+            if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
+                fprintf('hmi: %d states, it %d, initializing w\n', K, it)
+            end
 
-        % are we doing soft kmeans?
-        soft_kmeans = isequal(args.soft_kmeans, 'always') | ((it == 1) & isequal(args.soft_kmeans, 'init'));
+            % are we doing soft kmeans?
+            soft_kmeans = isequal(args.soft_kmeans, 'always') | ((it == 1) & isequal(args.soft_kmeans, 'init'));
 
-        if (it == 1)
-            switch length(args.w0(:))
-                case N*M
-                    [w0(:, :, 1)] =  args.w0;
-                case N
-                    for m = 1:M
-                        [w0(:, m, 1)] =  args.w0(:);
-                    end
-                otherwise
-                    for n = 1:N
-                        if strcmpi(args.display, 'trace')
-                            fprintf('hmi: %d states, it %d, trace %d of %d\n', K, 0, n, N);
-                        end    
-                        for m = 1:M 
-                            w0(n, m, 1) =  init_w(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
+            if (it == 1)
+                switch length(args.w0(:))
+                    case N*M
+                        [w0(:, :, 1)] =  args.w0;
+                    case N
+                        for m = 1:M
+                            [w0(:, m, 1)] =  args.w0(:);
                         end
+                    otherwise
+                        for n = 1:N
+                            if strcmpi(args.display, 'trace')
+                                fprintf('hmi: %d states, it %d, trace %d of %d\n', K, 0, n, N);
+                            end    
+                            for m = 1:M
+                                w0(n, m, 1) =  init_w(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
+                            end
+                        end
+                end
+            else
+                % use value from previous iteration
+                w0(:, :, 1) = w(it-1, :, :);
+            end
+
+            % additional restarts use a randomized guess for the
+            % prior parameters
+            for r = 2:R
+                for n = 1:N
+                    for m = 1:M
+                        % draw w0 from prior u for other restarts
+                        w0(n, m, r) = init_w(data{n}, u(it, m), 'soft_kmeans', soft_kmeans);
                     end
+                end
             end
         else
-            % use values from previous iteration
+            % only do one restart and use w from last iteration as guess
+            R = 1;
             w0(:, :, 1) = w(it-1, :, :);
         end
 
-        % additional restarts use a randomized guess for the
-        % prior parameters
-        for r = 2:R
-            for n = 1:N
-                for m = 1:M
-                    % draw w0 from prior u for other restarts
-                    w0(n, m, r) = init_w(data{n}, u(it, m), 'soft_kmeans', soft_kmeans);
+        if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
+            fprintf('hmi: %d states, it %d, running VBEM\n', K, it)
+        end
+
+        % run vbem on each trace 
+        L(it,:,:) = -Inf * ones(N, M);
+        for n = 1:N
+            if strcmpi(args.display, 'trace')
+                fprintf('hmi: %d states, it %d, trace %d of %d\n', K, it, n, N);
+            end 
+            % loop over prior mixture components
+            for m = 1:M
+                % loop over restarts
+                for r = 1:R
+                    [w_, L_, stat_] = vbem(data{n}, w0(n, m, r), u(it, m), args.vbem);
+                    % keep result if L better than previous restarts
+                    if L_(end) > L(it, n, m)
+                        w(it, n, m) = w_;
+                        L(it, n, m) = L_(end);
+                        restart(n, m) = r;
+                    end
                 end
             end
         end
-    else
-        % only do one restart and use w from last iteration as guess
-        R = 1;
-        w0(:, :, 1) = w(it-1, :, :);
-    end
 
-    if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-        fprintf('hmi: %d states, it %d, running VBEM\n', K, it)
-    end
+        % calculate prior mixture responsiblities for each trace
+        Lit = reshape(L(it, :, :), [N M]);
+        L0 = bsxfun(@minus, Lit , mean(Lit, 2));
+        omega(it).gamma = normalize(bsxfun(@times, exp(L0), omega(it).pi'), 2);
+        omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
 
-    % run vbem on each trace 
-    L(it,:,:) = -Inf * ones(N, M);
-    for n = 1:N
-        if strcmpi(args.display, 'trace')
-            fprintf('hmi: %d states, it %d, trace %d of %d\n', K, it, n, N);
-        end 
-        % loop over prior mixture components
+        fprintf(2, '[debug] mean(omega(it).gamma, 1), std(omega(it).gamma, 1): %.2f, %.2f\n', mean(omega(it).gamma, 1), std(omega(it).gamma, 1));
+
+        % calculate summed evidence
+        sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
+
+        if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
+            fprintf('hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
+                    K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
+        end    
+
+        % check for convergence
+        if (it > 1) & (abs((sL(it) - sL(it-1))) < args.threshold * abs(sL(it-1)) | it > args.max_iter)
+            if sL(it) < sL(it-1)
+              it = it-1;
+            end
+            break;
+        end
+
+        % run hierarchical updates
         for m = 1:M
-            % loop over restarts
-            for r = 1:R
-                [w_, L_, stat_] = vbem(data{n}, w0(n, m, r), u(it, m), args.vbem);
-                % keep result if L better than previous restarts
-                if L_(end) > L(it, n, m)
-                    w(it, n, m) = w_;
-                    L(it, n, m) = L_(end);
-                    restart(n, m) = r;
-                end
-            end
+            u(it+1, m) = hstep_ml(w(it, :, m), u(it, m), omega(it).gamma(:, m));
+        end
+
+        % proceed with next iteration
+        it = it + 1;
+    end
+
+    % place vbem output in struct 
+    for n = 1:N
+        for m = 1:M
+            vb(n,m) = struct('w', w(it,n,m), ...
+                             'L', L(it,n,m), ...
+                             'restart', restart(n,m));
         end
     end
 
-    % calculate prior mixture responsiblities for each trace
-    Lit = reshape(L(it, :, :), [N M]);
-    L0 = bsxfun(@minus, Lit , mean(Lit, 2));
-    omega(it).gamma = normalize(bsxfun(@times, exp(L0), omega(it).pi'), 2);
-    omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
+    % calculate viterbi paths
+    for n = 1:N
+        m = find(bsxfun(@eq, L(it,n,:), max(L(it,n,:))));
+        [vit(n).z, vit(n).x] = viterbi_vb(w(it,n,m), data{n});
+        vit(n).y = m; 
+    end 
 
-    % calculate summed evidence
-    sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
+    % assign outputs
+    L = sL(1:it);
+    u = u(it,:);
+    omega = omega(it);
+catch ME
+    % ok something went wrong here, so dump workspace to disk for inspection
+    day_time =  datestr(now, 'yymmdd-HH.MM');
+    save_name = sprintf('crashdump-hmi-%s.mat', day_time);
+    save(save_name);
 
-    if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
-        fprintf('hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
-                K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
-    end    
-
-    % check for convergence
-    if (it > 1) & (abs((sL(it) - sL(it-1))) < args.threshold * abs(sL(it-1)) | it > args.max_iter)
-        if sL(it) < sL(it-1)
-          it = it-1;
-        end
-        break;
-    end
-
-    % run hierarchical updates
-    for m = 1:M
-        u(it+1, m) = hstep_ml(w(it, :, m), u(it, m), omega(it).gamma(:, m));
-    end
-
-    % proceed with next iteration
-    it = it + 1;
+    rethrow(ME);
 end
-
-% place vbem output in struct 
-for n = 1:N
-    for m = 1:M
-        vb(n,m) = struct('w', w(it,n,m), ...
-                         'L', L(it,n,m), ...
-                         'restart', restart(n,m));
-    end
-end
-
-% calculate viterbi paths
-for n = 1:N
-    m = find(bsxfun(@eq, L(it,n,:), max(L(it,n,:))));
-    [vit(n).z, vit(n).x] = viterbi_vb(w(it,n,m), data{n});
-    vit(n).y = m; 
-end 
-
-% assign outputs
-L = sL(1:it);
-u = u(it,:);
-omega = omega(it);
