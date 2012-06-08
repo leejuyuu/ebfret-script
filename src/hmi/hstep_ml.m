@@ -126,7 +126,7 @@ if nargin < 3
 end
 
 % assign weights to w
-w0 = num2cell(bsxfun(@rdivide, weights, sum(weights, 1)));
+w0 = num2cell(weights ./ sum(weights(:)));
 [w(:).wt] = deal(w0{:});
 
 % initialize struct for updated params
@@ -156,10 +156,11 @@ E_ml = sum([E_ml{:}], 2);
 % -(Grad_nu' f(nu', chi')) / f  =
 % - 1/2 [ 1/w.beta +  w.nu w.W w.mu^2
 %         + log(pi / w.W) - psi^0(w.nu/2) ]
-E_log_g = arrayfun(@(w) -0.5 * w.wt .* (1 ./ w.beta ...
-                               + w.nu .* w.W .* w.mu.^2 ...
-                               + log(pi ./ w.W) ...
-                               - psi(w.nu/2)), ...
+E_log_g = arrayfun(@(w) -0.5 * w.wt .* ...
+                        (1 ./ w.beta ...
+                         + w.nu .* w.W .* w.mu.^2 ...
+                         + log(pi ./ w.W) ...
+                         - psi(w.nu/2)), ...
                    w, 'UniformOutput', false);
 E_log_g = sum([E_log_g{:}], 2);
 
@@ -198,7 +199,7 @@ w_pi = exp(E_log_wpi);
 
 %(pi): solve system of equations
 
-% get norm of u.piin right ballpark first
+% get norm of u.pi in right ballpark first
 root_fun = @(P) (E_log_wpi - (psi(P * u.pi) - psi(sum(P * u.pi)))) .* (w_pi + eps);
 P = lsqnonlin(root_fun, 1, 0, Inf, opts);
 u.pi = P * u.pi;
