@@ -174,7 +174,7 @@ try
 
             if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
                 fprintf('[%s] hmi: %d states, it %d, initializing w\n', ...
-                         datestr(now, 'yymmdd HH.MM'), K, it)
+                         datestr(now, 'yymmdd HH:MM:SS'), K, it)
             end
 
             % are we doing soft kmeans?
@@ -192,7 +192,7 @@ try
                         for n = 1:N
                             if strcmpi(args.display, 'trace')
                                 fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', ...
-                                         datestr(now, 'yymmdd HH.MM'), K, 0, n, N);
+                                         datestr(now, 'yymmdd HH:MM:SS'), K, 0, n, N);
                             end    
                             for m = 1:M
                                 w0(n, m, 1) =  init_w(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
@@ -222,7 +222,7 @@ try
 
         if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
             fprintf('[%s] hmi: %d states, it %d, running VBEM\n', ...
-                     datestr(now, 'yymmdd HH.MM'), K, it)
+                     datestr(now, 'yymmdd HH:MM:SS'), K, it)
         end
 
         % run vbem on each trace 
@@ -230,7 +230,7 @@ try
         for n = 1:N
             if strcmpi(args.display, 'trace')
                 fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', ...
-                         datestr(now, 'yymmdd HH.MM'), K, it, n, N);
+                         datestr(now, 'yymmdd HH:MM:SS'), K, it, n, N);
             end 
             % loop over prior mixture components
             for m = 1:M
@@ -258,7 +258,7 @@ try
 
         if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
             fprintf('[%s] hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
-                    datestr(now, 'yymmdd HH.MM'), K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
+                    datestr(now, 'yymmdd HH:MM:SS'), K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
         end    
 
         % check for convergence
