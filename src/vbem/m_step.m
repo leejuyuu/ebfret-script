@@ -13,15 +13,18 @@ function w = m_step(u, x, g, xi)
     % structs being dissimilar because of the order of the fields
     w = u;
 
-    % Update for pi
-    %
-    % w.pi(k) = u.pi(k) + g(1, k) 
-    w.pi = u.pi + g(1, :)'; 
+    % Update pi and A if xi counts supplied
+    if nargin > 3
+        % Update for pi
+        %
+        % w.pi(k) = u.pi(k) + g(1, k) 
+        w.pi = u.pi + g(1, :)'; 
 
-    % Update fo A
-    %
-    % w.A(k, l) = u.A(k, l) + sum_t xi(t, k, l)
-    w.A = u.A + squeeze(sum(xi, 1));
+        % Update for A
+        %
+        % w.A(k, l) = u.A(k, l) + sum_t xi(t, k, l)
+        w.A = u.A + squeeze(sum(xi, 1));
+    end
 
     % Calculate expectation of sufficient statistics under q(z)
     %
