@@ -257,7 +257,7 @@ try
         sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
 
         if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
-            fprintf('[%s], hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
+            fprintf('[%s] hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
                     datestr(now, 'yymmdd HH.MM'), K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
         end    
 
