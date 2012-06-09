@@ -122,10 +122,12 @@ function w = init_w(x, u, varargin)
             gmm = gmdistribution.fit(x, 1, 'Regularize', 1e-6, ...
                                      'Options', struct('Tolerance', args.threshold));
         end
-            
-        theta0.pi = gmm.PComponents(:);
-        theta0.mu = gmm.mu;
-        theta0.Sigma = gmm.Sigma;                  
+        
+        if all(isfield(gmm, {'PComponents', 'mu', 'Sigma'}))
+            theta0.pi = gmm.PComponents(:);
+            theta0.mu = gmm.mu;
+            theta0.Sigma = gmm.Sigma;                  
+        end
     end
 
     % assign results
