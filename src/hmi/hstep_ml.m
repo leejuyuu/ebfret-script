@@ -132,49 +132,33 @@ w0 = num2cell(weights ./ sum(weights(:)));
 % initialize struct for updated params
 u_old = u;
 
-% (mu, lambda) ~ Normal-Gamma
-% Expectation Value eta1: E[lambda] = w.nu * w.W
+% (mu, lambda) ~ 1D Normal-Wishart (i.e. Normal-Gamma)
+
+% Expectation Value E[lambda] = w.nu * w.W
 E_l = arrayfun(@(w) w.nu .* w.W .* w.wt, w, 'UniformOutput', false);
 E_l = sum([E_l{:}], 2);
 
-% (mu, lambda)
-% Expectation Value eta2: E[mu * lambda] = w.nu * w.W * w.mu
-E_ml = arrayfun(@(w) w.nu .* w.W .* w.mu .* w.wt, w, 'UniformOutput', false);
+% Expectation Value E[mu * lambda] = w.nu * w.W * w.mu
+E_ml = arrayfun(@(w) w.nu .* w.W .* w.mu .* w.wt, w, ...
+                'UniformOutput', false);
 E_ml = sum([E_ml{:}], 2);
 
-% (mu, lambda): For expectation values of E[log g] we use 
-%
-% Grad_nu'  Int  d theta  q(theta)  =  0 
-%           =  [ (Grad_nu' f(nu', chi')) / f  +  <log g>_q(theta) ]
-%
-% So
-%
-% <log g>_q(theta | w(n)) = - (Grad_nu' f(nu', chi')) / f
-%
-% With the latter expression reducing to:
-% 
-% -(Grad_nu' f(nu', chi')) / f  =
-% - 1/2 [ 1/w.beta +  w.nu w.W w.mu^2
-%         + log(pi / w.W) - psi^0(w.nu/2) ]
-E_log_g = arrayfun(@(w) -0.5 * w.wt .* ...
-                        (1 ./ w.beta ...
-                         + w.nu .* w.W .* w.mu.^2 ...
-                         + log(pi ./ w.W) ...
-                         - psi(w.nu/2)), ...
-                   w, 'UniformOutput', false);
-E_log_g = sum([E_log_g{:}], 2);
+% Expectation Value E[mu^2 * lambda] = 1 / w.beta + w.mu^2 w.W w.nu
+E_m2l = arrayfun(@(w) (1./w.beta + w.mu.^2 .* w.W .* w.nu) .* w.wt, w, ...
+                'UniformOutput', false);
+E_m2l = sum([E_m2l{:}], 2);
+
+% Expectation Value E[log lambda] = psi(w.nu / 2) + log(2 w.W)
+E_log_l = arrayfun(@(w) (psi(0.5 * w.nu) + log(2 * w.W)) .* w.wt, w, ...
+                   'UniformOutput', false);
+E_log_l = sum([E_log_l{:}], 2);
+
 
 % (mu, lambda): Solve for u.nu
 %
-%   -<log g> =  1/2 ( 1 / (u.nu -1)
-%                     + E[mu lambda]^2 / E[lambda]
-%                     + Log[pi u.nu / E[lambda]]
-%                     - psi(u.nu/2) )
-root_fun = @(nu) E_log_g ...
-                 + 0.5 * ((1 ./ (nu - 1)) ...
-                          + (E_ml.^2 ./ E_l) ...
-                          + log(pi .* nu ./ E_l) ...
-                          - psi(nu / 2));
+%   psi(u.nu/2) + log(u.nu) 
+%       = log(2) + log(E[lambda]) + E[log(lambda)]
+root_fun = @(nu) psi(0.5 * nu) + log(nu) - log(2) - log(E_l) - E_log_l;
 u.nu = lsqnonlin(root_fun, ...
                  u_old.nu, ...
                  ones(size(u_old.nu)), ...
@@ -183,7 +167,7 @@ u.nu = lsqnonlin(root_fun, ...
 
 % (mu, lambda): Solve u.mu, u.beta and u.W
 u.mu = E_ml ./ E_l;
-u.beta = u.nu - 1;
+u.beta = 1 ./ (E_m2l - E_ml.^2 ./ E_l);
 u.W  = E_l ./ u.nu;
 
 % pi ~ Dirichlet
