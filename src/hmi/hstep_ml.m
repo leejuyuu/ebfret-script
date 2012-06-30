@@ -156,9 +156,9 @@ E_log_l = sum([E_log_l{:}], 2);
 
 % (mu, lambda): Solve for u.nu
 %
-%   psi(u.nu/2) + log(u.nu) 
-%       = log(2) + log(E[lambda]) + E[log(lambda)]
-root_fun = @(nu) psi(0.5 * nu) + log(nu) - log(2) - log(E_l) - E_log_l;
+%   psi(u.nu/2) - log(u.nu/2) 
+%       = E[log(lambda)] - log(E[lambda])
+root_fun = @(nu) psi(0.5 * nu) - log(0.5 * nu) - E_log_l + log(E_l);
 u.nu = lsqnonlin(root_fun, ...
                  u_old.nu, ...
                  ones(size(u_old.nu)), ...
