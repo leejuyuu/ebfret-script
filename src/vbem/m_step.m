@@ -44,7 +44,7 @@ function w = m_step(u, x, g, xi)
                        reshape(x', [1 D T])), 3);
     % dx(k,d,t) = x(t,d) - xmean(k,d) 
     dx = bsxfun(@minus, reshape(x', [1 D T]), xmean);
-    % xsigma(k, d, e) = Sum_t g0(t, k) dx(k, d, t) dx(k, e, t)
+    % xvar(k, d, e) = Sum_t g0(t, k) dx(k, d, t) dx(k, e, t)
     xvar = squeeze(sum(bsxfun(@times, ...
                               reshape(g0', [K 1 1 T]), ... 
                               bsxfun(@times, ...
@@ -64,7 +64,7 @@ function w = m_step(u, x, g, xi)
     % Update for W:
     %
     % Inv(w.W(k, d, e)) = Inv(u.W(k, d, e)
-    %                     + G(k) * xsigma(k, d, e)
+    %                     + G(k) * xvar(k, d, e)
     %                     + (u.beta(k) * G(k)) / (u.beta(k) + G(k))  
     %                       * (xmean(k, d) - u.mu(k, e))
     %                       * (xmean(k, d) - u.mu(k, e)) 
