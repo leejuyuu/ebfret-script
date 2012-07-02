@@ -87,7 +87,7 @@ function runs = vbem_fret(x, K_values, restarts, varargin)
 					end
 					vb{n,r} = struct();
 					vb{n,r}.w0 = init_w_gmm(x{n}, u);
-					[vb{n,r}.w, vb{n,r}.L, vb{n,r}.stat] = ...
+					[vb{n,r}.w, vb{n,r}.L] = ...
 						vbem(x{n}, vb{n,r}.w0, u, opts.vbem);
 				end
 			end
