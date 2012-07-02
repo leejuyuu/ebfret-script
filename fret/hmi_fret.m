@@ -51,19 +51,14 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     %
     %   .u struct
     %       Hyperparameters for ensemble distribution
-    %   
     %   .L (1xI)
     %       Summed evidence for each hierarchical iteration
-    %
     %   .vb (1xN) struct    
     %       VBEM output for each trace
-    %
     %   .vit (1xN) struct
     %       Viterbi path for each trace
-    %
     %   .K int
     %       Number of states
-    %
     %   .u0 struct
     %       Initial guess for hyperparameters
 
