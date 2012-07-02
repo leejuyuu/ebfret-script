@@ -135,7 +135,7 @@ function runs = em_fret(x, K_values, restarts, varargin)
 	catch ME
 		% ok something went wrong here, so dump workspace to disk for inspection
 		day_time = 	datestr(now, 'yymmdd-HH.MM');
-        save_name = sprintf('crashdump-vbem_fret-%s.mat', day_time);
+        save_name = sprintf('crashdump-em_fret-%s.mat', day_time);
 		save(save_name);
 
 	    % close matlabpool if necessary
