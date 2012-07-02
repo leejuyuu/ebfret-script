@@ -31,7 +31,17 @@ function runs = vbem_fret(x, K_values, restarts, varargin)
 	% Outputs
 	% -------
 	% 
-	% Results are saved to 'save_name.mat'.
+    % runs : (1xR) struct
+    %   Output of vbem inference for each K value (see vbem.m)
+    %
+    %   .u struct
+    %       Hyperparameters for ensemble distribution
+    %   .vb (1xN) struct    
+    %       VBEM output for each trace
+    %   .vit (1xN) struct
+    %       Viterbi path for each trace
+    %   .K int
+    %       Number of states
 
 	% parse input
     ip = inputParser();
