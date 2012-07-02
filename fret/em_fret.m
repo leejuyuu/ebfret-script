@@ -97,10 +97,10 @@ function runs = em_fret(x, K_values, restarts, varargin)
 					ml{n,r} = struct();
 					w0 = init_w_gmm(x{n}, u);
 					ml{n,r}.theta0 = theta_map(w0);
-					[ml{n,r}.theta, ml{n,r}.L, ml{n,r}.stat] = ...
+					[ml{n,r}.theta, ml{n,r}.L stat] = ...
 						em(x{n}, ml{n,r}.theta0, opts.em);
 					% hack: set L to -inf if likelihood diverged
-					if any(ml{n,r}.stat.gamma ~= ml{n,r}.stat.gamma)
+					if any(stat.gamma ~= stat.gamma)
 						ml{n,r}.L(end) = -inf
 					end
 				end
