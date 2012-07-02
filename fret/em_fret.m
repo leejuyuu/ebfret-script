@@ -1,13 +1,10 @@
-function em_fret(save_name, x, K_values, restarts, varargin)
-    % em_fret(save_name, x, K_values, restarts, varargin)
+function runs = em_fret(x, K_values, restarts, varargin)
+    % em_fret(x, K_values, restarts, varargin)
     %
     % Runs EM inference (maximum likelihood) on a set of FRET time series.
 	%
 	% Inputs
 	% ------
-	%
-	% save_name : string
-	%	File name to save results to (without extension)
 	%
     % x : (1xN) cell
     %   Time series to perform inference on.
@@ -34,12 +31,21 @@ function em_fret(save_name, x, K_values, restarts, varargin)
 	% Outputs
 	% -------
 	% 
-	% Results are saved to 'save_name.mat'.
+    % runs : (1xR) struct
+    %   Output of em inference for each K value (see em.m)
+    %
+    %   .u struct
+    %       Hyperparameters for ensemble distribution
+    %   .em (1xN) struct    
+    %       VBEM output for each trace
+    %   .vit (1xN) struct
+    %       Viterbi path for each trace
+    %   .K int
+    %       Number of states
 
 	% parse input
     ip = inputParser();
     ip.StructExpand = true;
-    ip.addRequired('save_name', @isstr);
     ip.addRequired('x', @iscell);
 	ip.addRequired('K_values', @isnumeric);
 	ip.addRequired('restarts', @isscalar);
@@ -47,7 +53,7 @@ function em_fret(save_name, x, K_values, restarts, varargin)
     ip.addParamValue('display', 'off', ...
                       @(s) any(strcmpi(s, {'all', 'traces', 'states', 'none'})));
 	ip.addParamValue('num_cpu', 1, @isscalar);
-    ip.parse(save_name, x, K_values, restarts, varargin{:});
+    ip.parse(x, K_values, restarts, varargin{:});
     opts = ip.Results;
 
     % open matlabpool if using mutliple CPU's
@@ -115,17 +121,13 @@ function em_fret(save_name, x, K_values, restarts, varargin)
 
 			% assign outputs
 			runs(k).K = K;
-			runs(k).ml = ml;
+			runs(k).em = ml;
 			runs(k).vit = vit;
 		end
 
 		% restore warning status
 		warning(warn);
 
-		% save results to disk
-		save_name = sprintf('%s.mat', opts.save_name);
-		save(save_name, 'x', 'opts', 'runs');
-	
 	    % close matlabpool if necessary
 	    if opts.num_cpu > 1
 	    	matlabpool('CLOSE');
@@ -133,7 +135,7 @@ function em_fret(save_name, x, K_values, restarts, varargin)
 	catch ME
 		% ok something went wrong here, so dump workspace to disk for inspection
 		day_time = 	datestr(now, 'yymmdd-HH.MM');
-		save_name = sprintf('%s-crashdump-%s.mat', opts.save_name, day_time);
+        save_name = sprintf('crashdump-vbem_fret-%s.mat', day_time);
 		save(save_name);
 
 	    % close matlabpool if necessary
@@ -141,5 +143,5 @@ function em_fret(save_name, x, K_values, restarts, varargin)
 	    	matlabpool('CLOSE');
 	    end
 
-		throw(ME);
+		rethrow(ME);
 	end
