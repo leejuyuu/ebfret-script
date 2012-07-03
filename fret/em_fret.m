@@ -113,6 +113,11 @@ function runs = em_fret(x, K_values, restarts, varargin)
 			idxs = (idx(:)-1)*N + (1:N)';
 			ml = ml(idxs);
 
+			% calculate BIC
+			T = cellfun(@length, x);
+			bic = num2cell(-2 * L(idxs) + K * log(T(:)));
+			[ml.bic] = deal(bic{:});
+
 			% get viterbi paths
 			vit = struct();
 			for n = 1:N
