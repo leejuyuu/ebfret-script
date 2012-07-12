@@ -271,7 +271,7 @@ try
 
         % run hierarchical updates
         for m = 1:M
-            u(it+1, m) = hstep_ml(w(it, :, m), u(it, m), omega(it).gamma(:, m));
+            u(it+1, m) = hstep_hmm(w(it, :, m), u(it, m), omega(it).gamma(:, m));
         end
 
         % proceed with next iteration
