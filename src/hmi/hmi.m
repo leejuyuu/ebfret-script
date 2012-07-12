@@ -236,7 +236,7 @@ try
             for m = 1:M
                 % loop over restarts
                 for r = 1:R
-                    [w_, L_, stat_] = vbem(data{n}, w0(n, m, r), u(it, m), args.vbem);
+                    [w_, L_, stat_] = vbem_hmm(data{n}, w0(n, m, r), u(it, m), args.vbem);
                     % keep result if L better than previous restarts
                     if L_(end) > L(it, n, m)
                         w(it, n, m) = w_;
