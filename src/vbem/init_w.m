@@ -12,7 +12,7 @@ function w = init_w(x, u, varargin)
     %   Signal to learn posterior from.
     %
     % u : struct
-    %   Hyperparameters for VBEM/HMI algorithm
+    %   Hyperparameters for VBEM/EB algorithm
     %
     %
     % Variable Inputs

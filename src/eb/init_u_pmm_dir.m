@@ -22,7 +22,7 @@ function u = init_u_pmm_dir(M, w, u, varargin)
     %   (see function docs)
     %
     % u : struct
-    %   Hyperparameters obtained from HMI process (see function docs)
+    %   Hyperparameters obtained from EB process (see function docs)
     %
     % Variable Inputs
     % ---------------

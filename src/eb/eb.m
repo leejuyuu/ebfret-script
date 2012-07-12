@@ -1,7 +1,7 @@
-function [u, L, vb, vit, omega] = hmi(data, u0, w0, varargin)
-% [u, L, vb, vit, omega] = hmi(data, u0)
+function [u, L, vb, vit, omega] = eb(data, u0, w0, varargin)
+% [u, L, vb, vit, omega] = eb(data, u0)
 %
-% Runs a hierarchical inference process on a collection of single 
+% Runs a empirical Bayes inferenceon a collection of single 
 % molecule FRET time series (or traces) using a Hidden Markov Model.
 %
 % The inference process iteratively performs two steps:
@@ -92,7 +92,7 @@ function [u, L, vb, vit, omega] = hmi(data, u0, w0, varargin)
 %
 %   L : (I x 1) 
 %     Total lower bound summed over all traces for each 
-%     HMI iteration 
+%     Empirical Bayes iteration 
 %
 %   vb : (N x M) struct
 %     Output of VBEM algorithm for each trace
@@ -173,7 +173,7 @@ try
             % iteration is used in the fist restart
 
             if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-                fprintf('[%s] hmi: %d states, it %d, initializing w\n', ...
+                fprintf('[%s] eb: %d states, it %d, initializing w\n', ...
                          datestr(now, 'yymmdd HH:MM:SS'), K, it)
             end
 
@@ -191,7 +191,7 @@ try
                     otherwise
                         for n = 1:N
                             if strcmpi(args.display, 'trace')
-                                fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', ...
+                                fprintf('[%s] eb: %d states, it %d, trace %d of %d\n', ...
                                          datestr(now, 'yymmdd HH:MM:SS'), K, 0, n, N);
                             end    
                             for m = 1:M
@@ -221,7 +221,7 @@ try
         end
 
         if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-            fprintf('[%s] hmi: %d states, it %d, running VBEM\n', ...
+            fprintf('[%s] eb: %d states, it %d, running VBEM\n', ...
                      datestr(now, 'yymmdd HH:MM:SS'), K, it)
         end
 
@@ -229,7 +229,7 @@ try
         L(it,:,:) = -Inf * ones(N, M);
         for n = 1:N
             if strcmpi(args.display, 'trace')
-                fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', ...
+                fprintf('[%s] eb: %d states, it %d, trace %d of %d\n', ...
                          datestr(now, 'yymmdd HH:MM:SS'), K, it, n, N);
             end 
             % loop over prior mixture components
@@ -257,7 +257,7 @@ try
         sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
 
         if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
-            fprintf('[%s] hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
+            fprintf('[%s] eb: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
                     datestr(now, 'yymmdd HH:MM:SS'), K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
         end    
 
@@ -301,7 +301,7 @@ try
 catch ME
     % ok something went wrong here, so dump workspace to disk for inspection
     day_time =  datestr(now, 'yymmdd-HH.MM');
-    save_name = sprintf('crashdump-hmi-%s.mat', day_time);
+    save_name = sprintf('crashdump-eb-%s.mat', day_time);
     save(save_name);
 
     rethrow(ME);

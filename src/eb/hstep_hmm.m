@@ -1,7 +1,7 @@
 function u_new = hstep_ml(w, u, weights)
 % u_new = hstep_ml(w, u, varargin) 
 %
-% Hyper parameter updates for Hierarchical Model Inference (HMI)
+% Hyper parameter updates for empirical Bayes inference (EB)
 % on a single-molecule FRET dataset.
 %
 % The input of this method is a set of  posteriors produced by running 
