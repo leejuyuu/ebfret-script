@@ -1,5 +1,5 @@
-function u_new = hstep_ml(w, u, weights)
-% u_new = hstep_ml(w, u, varargin) 
+function u = hstep_hmm(w, weights)
+% u = hstep_hmm(w, weights)
 %
 % Hyper parameter updates for empirical Bayes inference (EB)
 % on a single-molecule FRET dataset.
@@ -42,11 +42,6 @@ function u_new = hstep_ml(w, u, weights)
 %           Normal-Wishart prior - state precisions
 %       .nu (K x 1)
 %           Normal-Wishart prior - degrees of freedom
-%           (must be equal to beta+1)
-%
-%   u : struct 
-%       Hyperparameters for the prior distribution p(theta | u)
-%       (same fields as w)
 %
 %   weights : (N x 1) optional
 %       Weighting for each trace in updates.
@@ -55,8 +50,9 @@ function u_new = hstep_ml(w, u, weights)
 % Outputs
 % -------
 %
-%   u_new : struct 
-%       Updated hyperparameters
+%   u : struct  
+%       Hyperparameters for the prior distribution p(theta | u)
+%       (same fields as w)
 %
 % Jan-Willem van de Meent
 % $Revision: 1.10$  $Date: 2011/08/04$
@@ -106,124 +102,15 @@ function u_new = hstep_ml(w, u, weights)
 %
 %   psi(Sum u.pi) - psi(u.pi) = -E[log pi] 
 
-
-% TODO: make this a variable arg
-threshold = 1e-6;
-
-% Get dimensions
-N = length(w);
-K = length(w(1).pi);
-
-% set small number > eps
-EPS = 10 * eps;
-
-% set optimization settings
-opts = optimset('display', 'off', 'tolX', threshold, 'tolFun', eps);
-
-% initialize dummy weights if not specified
-if nargin < 3
-    weights = ones(N,1);
+% intialize empty weights if unspecified
+if nargin < 2
+    weights = ones(size(w));
 end
-
-% assign weights to w
-w0 = num2cell(weights ./ sum(weights(:)));
-[w(:).wt] = deal(w0{:});
-
-% initialize struct for updated params
-u_old = u;
-
-% (mu, lambda) ~ 1D Normal-Wishart (i.e. Normal-Gamma)
-
-% Expectation Value E[lambda] = w.nu * w.W
-E_l = arrayfun(@(w) w.nu .* w.W .* w.wt, w, 'UniformOutput', false);
-E_l = sum([E_l{:}], 2);
-
-% Expectation Value E[mu * lambda] = w.nu * w.W * w.mu
-E_ml = arrayfun(@(w) w.nu .* w.W .* w.mu .* w.wt, w, ...
-                'UniformOutput', false);
-E_ml = sum([E_ml{:}], 2);
-
-% Expectation Value E[mu^2 * lambda] = 1 / w.beta + w.mu^2 w.W w.nu
-E_m2l = arrayfun(@(w) (1./w.beta + w.mu.^2 .* w.W .* w.nu) .* w.wt, w, ...
-                'UniformOutput', false);
-E_m2l = sum([E_m2l{:}], 2);
-
-% Expectation Value E[log lambda] = psi(w.nu / 2) + log(2 w.W)
-E_log_l = arrayfun(@(w) (psi(0.5 * w.nu) + log(2 * w.W)) .* w.wt, w, ...
-                   'UniformOutput', false);
-E_log_l = sum([E_log_l{:}], 2);
-
-
-% (mu, lambda): Solve for u.nu
-%
-%   psi(u.nu/2) - log(u.nu/2) 
-%       = E[log(lambda)] - log(E[lambda])
-root_fun = @(nu) psi(0.5 * nu) - log(0.5 * nu) - E_log_l + log(E_l);
-u.nu = lsqnonlin(root_fun, ...
-                 u_old.nu, ...
-                 ones(size(u_old.nu)), ...
-                 Inf + zeros(size(u_old.nu)), ...
-                 opts);
-
-% (mu, lambda): Solve u.mu, u.beta and u.W
-u.mu = E_ml ./ E_l;
-u.beta = 1 ./ (E_m2l - E_ml.^2 ./ E_l);
-u.W  = E_l ./ u.nu;
-
-% pi ~ Dirichlet
-% 
-% Expectation value E[log pi]: Use same trick as for E[log g]:
-%
-% E[log pi] = - (Grad_nu' f(nu', chi')) / f
-%           = - psi(Sum w.pi) + psi(w.pi)
-E_log_wpi = arrayfun(@(w) w.wt * (psi(w.pi + eps) - psi(sum(w.pi + eps))), ...
-                    w, 'UniformOutput', false);
-E_log_wpi = sum([E_log_wpi{:}], 2);
-w_pi = exp(E_log_wpi);
-
-%(pi): solve system of equations
-
-% get norm of u.pi in right ballpark first
-root_fun = @(P) (E_log_wpi - (psi(P * u.pi) - psi(sum(P * u.pi)))) .* (w_pi + eps);
-P = lsqnonlin(root_fun, 1, 0, Inf, opts);
-u.pi = P * u.pi;
-
-% now run interative updates on individual components
-upi_old = eps * ones(size(u.pi));
-while kl_dir(u.pi, upi_old) > threshold
-    upi_old = u.pi;
-    for k = 1:K
-        upi0 = sum(u.pi .* (k ~= 1:K)');
-        root_fun = @(upik) (E_log_wpi(k) - (psi(upik) - psi(upik + upi0))); 
-        u.pi(k) = lsqnonlin(root_fun, u.pi(k), 0, Inf, opts);
-    end
-end
-
-% A(k,:) ~ Dirichlet
-% E[log A(k,:)]: Same as E[log pi]
-E_log_wA = arrayfun(@(w) w.wt * bsxfun(@plus, psi(w.A + EPS), -psi(sum(w.A + EPS, 2))), ...
-                    w, 'UniformOutput', false);
-E_log_wA = sum(cat(3, E_log_wA{:}), 3);
-w_A = exp(E_log_wA);
-
-%A(k,:): solve system of equations
-u.A = u_old.A;
-for k = 1:K
-    %get amplitude in right ballpark first
-    root_fun = @(U) (E_log_wA(k,:) - (psi(U * u.A(k,:)) - psi(sum(U * u.A(k,:))))) .* (w_A(k,:) + eps);
-    U = lsqnonlin(root_fun, 1, 0, Inf, opts);
-    u.A(k,:) = U * u.A(k,:);
-
-    % now do all components
-    uAk_old = eps * ones(size(u.A(k,:)));
-    while kl_dir(u.A(k,:), uAk_old) > threshold
-        uAk_old = u.A(k,:);
-        for l = 1:K
-            uA0 = sum(u.A(k,:) .* (l ~= 1:K));
-            root_fun = @(uAkl) (E_log_wA(k,l) - (psi(uAkl) - psi(uAkl + uA0))); 
-            u.A(k,l) = lsqnonlin(root_fun, u.A(k,l), 0, Inf, opts);
-        end
-    end
-end
-
-u_new = u;
+% run normal-wishart updates for emission model parameters
+u = hstep_nw(w, weights);
+% add dirichlet updates for transition matrix
+u.A = hstep_dir({w.A}, weights);
+% add dirichlet updates for initial state probabilities
+u.pi = hstep_dir({w.pi}, weights);
+% ensure fields are aligned with w
+u = orderfields(u, fields(w));
