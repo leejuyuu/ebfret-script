@@ -1,23 +1,10 @@
-function [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step(w, x)
-    % [E_ln_pi, E_ln_A, E_p_x_z] = e_step(w)
+function [E_ln_det_L, E_ln_px_z] = e_step_nw(w, x)
+    % [E_ln_det_L, E_ln_px_z] = e_step_nw(w, x)
     % 
-    % E-step of VBEM algorithm.
+    % E-step of VBEM algorithm for Normal-Wishart distribution.
 
     % get dimensions
     [K D] = size(w.mu);
-
-    % Expectation of log intial state priors pi under q(pi | w.pi) 
-    % (MJB 3.69, CB 10.66, JCK 41)
-    %
-    % E[ln(w.pi(k))]  =  Int d pi  Dir(pi | w.pi) ln(pi)
-    %                 =  psi(w.pi(k)) - psi(Sum_l w.pi(l)))
-    E_ln_pi = psi(w.pi) - psi(sum(w.pi)); 
-
-    % Expectation of log transition matrix A under q(A | w.A) 
-    % (MJB 3.70, JCK 42)
-    %
-    % E_ln_A(k, l)  =  psi(w.A(k,l)) - psi(Sum_l w.A(k,l))
-    E_ln_A = bsxfun(@minus, psi(w.A), psi(sum(w.A, 2)));
 
     % Expectation of log emission precision |Lambda| 
     % under q(W | w.W) (CB 10.65, JKC 44)

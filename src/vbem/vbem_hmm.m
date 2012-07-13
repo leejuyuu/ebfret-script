@@ -201,7 +201,7 @@ for it = 1:args.max_iter
     % E-STEP: UPDATE Q(Z)
     %
     % q(z) = 1/Z_q(z) E_q(theta)[ ln p(x,z,theta) ]
-    [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step(w, x);
+    [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step_hmm(w, x);
 
     % Forward-back algorithm - computes expecation under q(z) of
     %
