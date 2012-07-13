@@ -1,4 +1,4 @@
-function [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step_hmm(w, x)
+function [E_ln_pi, E_ln_A, E_ln_px_z] = e_step_hmm(w, x)
     % [E_ln_pi, E_ln_A, E_p_x_z] = e_step_hmm(w)
     % 
     % E-step of VBEM algorithm.
@@ -20,4 +20,4 @@ function [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step_hmm(w, x)
     E_ln_A = bsxfun(@minus, psi(w.A), psi(sum(w.A, 2)));
 
     % Expectation of log precision and log emission probability
-    [E_ln_det_L, E_ln_px_z] = e_step_nw(w, x);
+    E_ln_px_z = e_step_nw(w, x);

@@ -1,5 +1,5 @@
-function [E_ln_det_L, E_ln_px_z] = e_step_nw(w, x)
-    % [E_ln_det_L, E_ln_px_z] = e_step_nw(w, x)
+function E_ln_px_z = e_step_nw(w, x)
+    % E_ln_px_z = e_step_nw(w, x)
     % 
     % E-step of VBEM algorithm for Normal-Wishart distribution.
 

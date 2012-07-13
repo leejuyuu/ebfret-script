@@ -1,5 +1,5 @@
-function [w, L, stat] = vbem(x, w0, u, varargin)
-% function [w, L, stat] = vbem(x, w0, u, varargin)
+function [w, L, stat] = vbem_hmm(x, w0, u, varargin)
+% function [w, L, stat] = vbem_hmm(x, w0, u, varargin)
 %
 % Variational Bayes Expectation Maximization for a Hidden Markov Model
 % with Gaussian emissions.
@@ -201,7 +201,7 @@ for it = 1:args.max_iter
     % E-STEP: UPDATE Q(Z)
     %
     % q(z) = 1/Z_q(z) E_q(theta)[ ln p(x,z,theta) ]
-    [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step_hmm(w, x);
+    [E_ln_pi, E_ln_A, E_ln_px_z] = e_step_hmm(w, x);
 
     % Forward-back algorithm - computes expecation under q(z) of
     %
@@ -227,7 +227,7 @@ for it = 1:args.max_iter
     % D_kl(q(theta) || p(theta)) = D_kl(q(mu, l) || p(mu, l)) 
     %                              + D_kl(q(A) || p(A)) 
     %                              + D_kl(q(pi) || p(pi))
-    L(it) = L_step(w, u, E_ln_det_L, ln_Z);
+    L(it) = ln_Z - kl_hmm(w, u);
 
     if Debug
         iter(it).ln_Z = ln_Z;
@@ -249,11 +249,11 @@ for it = 1:args.max_iter
 
     % check whether points need to be masked out
     if strcmp(args.ignore, 'none')
-        w = m_step(u, x, g, xi);
+        w = m_step_hmm(u, x, g, xi);
     else
         z_hat = viterbi(E_ln_px_z, E_ln_A, E_ln_pi);
         [g_f, xi_f] = jitter_filter(z_hat, g, xi, args.ignore); 
-        w = m_step(u, x, g_f, xi_f);
+        w = m_step_hmm(u, x, g_f, xi_f);
     end
 
     % check if the lower bound increase is less than threshold
