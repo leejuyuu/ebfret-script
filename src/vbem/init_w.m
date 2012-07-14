@@ -146,8 +146,8 @@ function w = init_w(x, u, varargin)
         if (length(L) > 1) & (L(end) > L(1))
             theta = theta_km;
         else
-            warning('init_w:gmm_map_not_converged', ...
-                    'soft kmeans step did not converge');
+            warning('init_w:gmm_map_failed', ...
+                    'soft kmeans initialization of state means failed');
         end
     end
 
