@@ -79,17 +79,6 @@ function [w, L, stat] = vbem_hmm(x, w0, u, varargin)
 %       ln_Z : float
 %           Log normalization constant of q(z).
 %           
-%       G : (K x 1)
-%           State occupation count Sum_t gamma(t, k)
-%
-%       xmean : (K x D)
-%           Expectation of emission means under gamma(t, k)
-%             xmean(k, d) = E_t[x(t, d)] 
-%
-%       xvar : (K x D x D)
-%           Expectation of emission variances under gamma(t, k)
-%             xvar(k, d, e) = E_t[(x(t, d) - xmean(k)) 
-%                                 (x(t, e) - xmean(k))]
 %
 % Jan-Willem van de Meent (modified from Matthew Beal and Jonathan Bronson)
 % $Revision: 1.00 $  $Date: 2011/08/03$
