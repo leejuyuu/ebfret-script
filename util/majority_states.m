@@ -110,9 +110,9 @@ function [w, u, mask] = majority_states(K, w, u, varargin)
 		    w(n) = filter_w(w(n), kdxs);
 		    %vb(n).stat = filter_stat(vb(n).stat, kdxs);
 	   	end
-        % construct new set of hyperparameters by running hstep update
+        % project hyperparameters
         u = filter_w(args.u, kdxs);
-        u = hstep_ml(w, u);
+        %u = hstep_ml(w, u);
 	else
 		idxs = 1:length(w);
 	end
