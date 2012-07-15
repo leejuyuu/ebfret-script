@@ -17,7 +17,7 @@ function [h, b] =  shist(data, err, bins, wt)
 	end
 	h = zeros(length(bins), size(data,1));
 	for d = 1:size(data,1)
-		pd = pd_norm(bins(:), data(d,:), err(d,:));
+		pd = pd_norm(bins(:), data(d,:), 1./err(d,:).^2);
 		% normalize distribution over bins
 		pd = normalize(pd, 1);
 		% histogram is sum over all traces
