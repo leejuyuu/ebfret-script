@@ -1,5 +1,5 @@
-function runs = hmi_fret_pmm_dir(x, hf_runs, M_values, K, varargin)
-    % hmi_fret_pmm_dir(save_name, x, hf_runs, M_values, K, varargin)
+function runs = hmi_fret_pmm_dir(x, w, u, M_values, varargin)
+    % hmi_fret_pmm_dir(x, w, u, M_values, varargin)
     %
     % Runs HMI inference on a set of FRET time series
     %
@@ -10,15 +10,14 @@ function runs = hmi_fret_pmm_dir(x, hf_runs, M_values, K, varargin)
     % x : (1xN) cell
     %   Time series to perform inference on.
     %
-    % hf_runs : (1xR) struct
-    %   Results from hmi_fret first pass
+    % w : (1xN) struct
+    %   VBEM variational parameters from first pass
+    %
+    % u : struct
+    %   Prior parameters from first pass
     %
     % M_values : (1xM)
     %   Number of subpopulations to use for each second pass
-    %
-    % K : int (optional)
-    %   Number of states to use for second pass. If unspecified,
-    %   the maximum evidence run from the previous pass is used
     %
     %
     % Variable Inputs
@@ -53,48 +52,22 @@ function runs = hmi_fret_pmm_dir(x, hf_runs, M_values, K, varargin)
     ip = inputParser();
     ip.StructExpand = true;
     ip.addRequired('x', @iscell);
-    ip.addRequired('hf_runs', @isstruct);
+    ip.addRequired('w', @isstruct);
+    ip.addRequired('u', @isstruct);
     ip.addRequired('M_values', @isnumeric);
-    ip.addOptional('K', 0, @isnumeric);
-    ip.addParamValue('use_majority_states', false, @isscalar);
-    ip.addParamValue('max_outliers', 1, @isscalar);
     ip.addParamValue('num_cpu', 1, @isscalar);
     ip.addParamValue('hmi', struct(), @isstruct);
     ip.addParamValue('vbem', struct(), @isstruct);
-    ip.parse(x, hf_runs, M_values, K, varargin{:})
+    ip.parse(x, w, u, M_values, varargin{:})
     opts = ip.Results;
 
     % get required args
     x = opts.x;
-    hf_runs = opts.hf_runs;
+    w = opts.w;
+    u = opts.u;
+    M_values = opts.M_values;
 
     try
-        % find run index and number of states with max evidence
-        L = arrayfun(@(rn) rn.L(end), hf_runs);
-        [m, i_max] = max(L(:));
-        K_max = hf_runs(i_max).K;
-
-        % if number of states is not specified, use max evidence value
-        if ~opts.K
-            opts.K = K_max;
-        end
-
-        if (opts.K < K_max) & opts.use_majority_states
-            % select K most populated states 
-            [w u idxs] = majority_states(opts.K, ...
-                                         [hf_runs(i_max).vb.w], ...
-                                         hf_runs(i_max).u, ...
-                                         'max_outliers', opts.max_outliers);
-            x = {x{idxs}};
-        else
-            % get max evidence hyperparameters with K states from previous pass
-            idxs = find(opts.K == [hf_runs.K]);
-            [m, j_max] = max(L(idxs));
-            i = idxs(j_max);
-            w = [hf_runs(i).vb.w];
-            u = hf_runs(i).u;
-        end
-
         % use pmm_dir function to initialize guesses for the u.A 
         % hyperparameters of each subpopulation
         for r = 1:length(M_values)
@@ -133,6 +106,5 @@ function runs = hmi_fret_pmm_dir(x, hf_runs, M_values, K, varargin)
          if opts.num_cpu > 1
              matlabpool('CLOSE');
          end
-
-         throw(ME);
+         rethrow(ME);
      end
