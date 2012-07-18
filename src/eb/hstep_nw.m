@@ -1,4 +1,4 @@
-function u = hstep_nw(w, weights)
+function u = hstep_nw(w, weights, fields)
 % u = hstep_nw(w, weights) 
 %
 % Empericial Bayes step for a Normal-Wishart prior.
@@ -42,11 +42,15 @@ function u = hstep_nw(w, weights)
 
 % Get dimensions
 N = length(w);
-K = length(w(1).mu);
+K = size(w(1).A,1);
 
 % intialize empty weights if unspecified
 if nargin < 2
     weights = ones(N,1);
+end
+
+if nargin < 3
+    fields = {'mu', 'beta', 'W', 'nu'};
 end
 
 % assign weights to w
@@ -55,7 +59,6 @@ w0 = num2cell(weights ./ sum(weights(:)));
 
 % initialize u
 u = struct();
-fields = {'mu', 'beta', 'W', 'nu'};
 for f = 1:length(fields)
     D = ndims(w(1).(fields{f}));
     % initialize each variable from naive weighted average
@@ -64,22 +67,28 @@ for f = 1:length(fields)
                                 cat(D+1, w.wt)), D+1); 
 end
 
+% get fieldnames
+muf = fields{1};
+betaf = fields{2};
+Wf = fields{3};
+nuf = fields{4};
+
 % Expectation Value E[lambda] = w.nu * w.W
-E_l = arrayfun(@(w) w.nu .* w.W .* w.wt, w, 'UniformOutput', false);
+E_l = arrayfun(@(w) w.(nuf) .* w.(Wf) .* w.wt, w, 'UniformOutput', false);
 E_l = sum([E_l{:}], 2);
 
 % Expectation Value E[mu * lambda] = w.nu * w.W * w.mu
-E_ml = arrayfun(@(w) w.nu .* w.W .* w.mu .* w.wt, w, ...
+E_ml = arrayfun(@(w) w.(nuf) .* w.(Wf) .* w.(muf) .* w.wt, w, ...
                 'UniformOutput', false);
 E_ml = sum([E_ml{:}], 2);
 
 % Expectation Value E[mu^2 * lambda] = 1 / w.beta + w.mu^2 w.W w.nu
-E_m2l = arrayfun(@(w) (1./w.beta + w.mu.^2 .* w.W .* w.nu) .* w.wt, w, ...
+E_m2l = arrayfun(@(w) (1./w.(betaf) + w.(muf).^2 .* w.(Wf) .* w.(nuf)) .* w.wt, w, ...
                 'UniformOutput', false);
 E_m2l = sum([E_m2l{:}], 2);
 
 % Expectation Value E[log lambda] = psi(w.nu / 2) + log(2 w.W)
-E_log_l = arrayfun(@(w) (psi(0.5 * w.nu) + log(2 * w.W)) .* w.wt, w, ...
+E_log_l = arrayfun(@(w) (psi(0.5 * w.(nuf)) + log(2 * w.(Wf))) .* w.wt, w, ...
                    'UniformOutput', false);
 E_log_l = sum([E_log_l{:}], 2);
 
@@ -95,13 +104,13 @@ opts = optimset('display', 'off', 'tolX', threshold, 'tolFun', eps);
 %   psi(u.nu/2) - log(u.nu/2) 
 %       = E[log(lambda)] - log(E[lambda])
 root_fun = @(nu) psi(0.5 * nu) - log(0.5 * nu) - E_log_l + log(E_l);
-u.nu = lsqnonlin(root_fun, ...
-                 u.nu, ...
-                 ones(size(u.nu)), ...
-                 Inf + zeros(size(u.nu)), ...
-                 opts);
+u.(nuf) = lsqnonlin(root_fun, ...
+                    u.(nuf), ...
+                    ones(size(u.(nuf))), ...
+                    Inf + zeros(size(u.(nuf))), ...
+                    opts);
 
 % (mu, lambda): Solve u.mu, u.beta and u.W
-u.mu = E_ml ./ E_l;
-u.beta = 1 ./ (E_m2l - E_ml.^2 ./ E_l);
-u.W  = E_l ./ u.nu;
+u.(muf) = E_ml ./ E_l;
+u.(betaf) = 1 ./ (E_m2l - E_ml.^2 ./ E_l);
+u.(Wf) = E_l ./ u.nu;
