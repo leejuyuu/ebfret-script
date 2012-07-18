@@ -69,7 +69,7 @@ opts = optimset('display', 'off', 'tolX', threshold, 'tolFun', eps);
 
 % initialize dummy weights if not specified
 if nargin < 3
-    weights = ones([1 1 N], 1) / N;
+    weights = ones([1 1 N]) / N;
 elseif length(weights(:)) ~= N
     error('hstep_dir:invalidArgs', ...
           'input weights has incorrect number of elements');
