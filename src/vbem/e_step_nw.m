@@ -13,14 +13,27 @@ function E_ln_px_z = e_step_nw(w, x)
     %                =  ln(|w.W|) + D ln(2) 
     %                   + Sum_d psi((w.nu(k) + 1 - d)/2)
     if D>1
-        E_ln_det_L = zeros(K, 1);  
-        for k=1:K
+        E_ln_det_L = zeros(length(w.nu), 1);  
+        for k=1:length(w.nu)
           E_ln_det_L(k) = log(det(w.W(k, :, :))) + D * log(2) + ...
-                          sum(psi((w.nu(k) + 1 - (1:D)) / 2), 2);
+                          sum(psi(0.5 * (w.nu(k) + 1 - (1:D))), 2);
         end
     else
-        E_ln_det_L = log(w.W) + D * log(2) + ...
-                     sum(psi(0.5 * bsxfun(@minus, w.nu + 1, (1:D))), 2);
+        E_ln_det_L = log(w.W) + log(2) + psi(0.5 * w.nu);
+    end 
+
+    % replicate w.nu w.beta w.W, and E_ln_det_L if necessary
+    if length(w.beta) == 1
+        w.beta = ones(K,1) * w.beta;
+    end
+    if length(w.nu) == 1
+        w.nu = ones(K,1) * w.nu;
+    end     
+    if length(w.W) == 1
+        w.W = bsxfun(@times, ones(K,1), w.W);
+    end
+    if length(E_ln_det_L) == 1
+        E_ln_det_L = ones(K,1) * E_ln_det_L;
     end
 
     % Expectation of Mahalanobis distance Delta^2 under q(theta | w)
