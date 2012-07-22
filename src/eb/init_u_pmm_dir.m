@@ -1,5 +1,5 @@
-function u = init_u_pmm_dir(M, w, u, varargin)
-	% u = init_u_pmm_dir(M, vb, u)
+function [u, L] = init_u_pmm_dir(M, w, u, varargin)
+	% [u, L] = init_u_pmm_dir(M, w, u, varargin)
 	%
 	% Initializes a set of hyperparameters with M subpopulations.
     % Hyperparameters for A are determined by running a mixture 
@@ -113,4 +113,5 @@ function u = init_u_pmm_dir(M, w, u, varargin)
     if strcmpi(args.display, 'final')
         fprintf('pmm_dir: restarts = %d, L = %.4e\n', args.restart, L_max);
     end
-end
+
+    L = L_max;
