@@ -102,12 +102,17 @@ gamma = alpha .* beta;
 % xi(k, l) = sum_t p(z(t)=k, z(t+1)=k+d(l) | x(1:T))
 %          = alpha(t, k) a(k,l) px_z(t+1, k+d(l)) beta(t+1, d(l)) / c(t+1)
 pxz_b_c = bsxfun(@times, 1./c(2:T), beta(2:T, :)) .* px_z(2:T, :);
-xi = ...
+xi_ = ...
   bsxfun(@times, A, ...
          sum(bsxfun(@times, ...
                     reshape(alpha(1:T-1, :)', [K 1 T-1]), ...
                     reshape(pxz_b_c', [1 K T-1])), 3));
 xi = spdiags(xi, d);
+for l = 1:length(d)
+  % spdiags puts the zeros in the wrong place for our purposes
+  % so correct this
+  xi(:, l) = circshift(xi(:, l), -d(l));
+end
 
 % Evidence
 %
