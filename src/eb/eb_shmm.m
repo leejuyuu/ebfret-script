@@ -215,7 +215,8 @@ ip.parse(data, u0, mu0, varargin{:});
 
         % run vbem on each trace 
         L(it,:,:) = -Inf * ones(N, M);
-        for n = 1:N
+        w_it = cell(N, M);
+        parfor n = 1:N
             if strcmpi(args.display, 'trace')
                 fprintf('[%s] eb: %d states, it %d, trace %d of %d\n', ...
                          datestr(now, 'yymmdd HH:MM:SS'), K, it, n, N);
@@ -227,16 +228,17 @@ ip.parse(data, u0, mu0, varargin{:});
                     [w_, L_, stat_] = vbem_shmm(data{n}, w0(n, m, r), u(it, m), (1:K)', args.vbem);
                     % keep result if L better than previous restarts
                     if L_(end) > L(it, n, m)
-                        w(it, n, m) = w_;
+                        w_it{n, m} = w_;
                         L(it, n, m) = L_(end);
                         restart(n, m) = r;
                     end
                 end
             end
         end
+        w(it,:,:) = reshape([w_it{:}], size(w_it));
 
         % calculate prior mixture responsiblities for each trace
-        Lit = reshape(L(it, :, :), [N M]);
+        Lit = reshape(L(it,:,:), [N M]);
         L0 = bsxfun(@minus, Lit , mean(Lit, 2));
         omega(it).gamma = normalize(bsxfun(@times, exp(L0), omega(it).pi'), 2);
         omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
