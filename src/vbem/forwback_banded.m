@@ -15,6 +15,13 @@ function  [gamma, xi, ln_Z] = forwback_banded(px_z, a, pi, d)
 %
 %         a(k, l) = p(z(t+1)=k+d(l) | z(t)=k, theta)
 %
+%       Note that a(k, l) may assign a non-zero probability to 
+%       transitions outside the range 1:K. These transitions are
+%       assumed to imply an invalid trajectory, and will be
+%       assigned zero probability in the posteriors gamma and xi. 
+%       However, the probability mass assigned to the transitions 
+%       does imply a lower log likelihood p(x(1:T) | theta).
+%
 %   pi : K x 1
 %       Prior probabilities for states
 %
@@ -54,7 +61,38 @@ end
 
 % get dimensions
 [T, K] = size(px_z);
-L = length(d);
+
+% if specified transition probabilities are such that a
+% trajectory can go out of bounds, the we need to pad the
+% accessible states with sink states that have zero probability
+pad = [0 0];
+for l = 1:length(d)
+  if d(l) < 0
+    pad(1) = abs(min(min((a(:,l) > 0) .* ...
+                         (d(l):K+d(l)-1)'), ...
+                     -pad(1)));
+  end
+  if d(l) > 0
+    pad(2) = max(max((a(:,l) > 0) .* ...
+                     (d(l)-K+1:d(l))'), ...
+                 pad(2));
+  end
+end
+
+% pad px_z with zeros
+px_z = cat(2, zeros(T, pad(1)), px_z, zeros(T, pad(2)));
+
+% pad pi with zeros
+pi = cat(1, zeros(pad(1),1), pi, zeros(pad(2),1));
+
+% realign diagonals in a
+a = cat(1, zeros(pad(1), length(d)), a, zeros(pad(2), length(d)));
+for l = 1:length(d)
+  a(:,l) = circshift(a(:,l), d(l)); 
+end
+
+% adjust numer of states
+K = K + sum(pad);
 
 % construct sparse transition matrix
 A = spdiags(a, d, zeros(K));
@@ -102,7 +140,7 @@ gamma = alpha .* beta;
 % xi(k, l) = sum_t p(z(t)=k, z(t+1)=k+d(l) | x(1:T))
 %          = alpha(t, k) a(k,l) px_z(t+1, k+d(l)) beta(t+1, d(l)) / c(t+1)
 pxz_b_c = bsxfun(@times, 1./c(2:T), beta(2:T, :)) .* px_z(2:T, :);
-xi_ = ...
+xi = ...
   bsxfun(@times, A, ...
          sum(bsxfun(@times, ...
                     reshape(alpha(1:T-1, :)', [K 1 T-1]), ...
@@ -113,6 +151,10 @@ for l = 1:length(d)
   % so correct this
   xi(:, l) = circshift(xi(:, l), -d(l));
 end
+
+% strip padded states from g and xi
+gamma = gamma(:, 1+pad(1):end-pad(2));
+xi = xi(1+pad(1):end-pad(2),:);
 
 % Evidence
 %
