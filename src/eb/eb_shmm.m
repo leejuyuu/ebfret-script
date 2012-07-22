@@ -10,9 +10,9 @@ function [u, L, vb, omega] = eb_shmm(data, u0, mu0, varargin)
 % 1. Run Variational Bayes Expectation Maximization (VBEM)
 %    on each Time Series. 
 %
-%    This yields two distributions q(theta | w) and q(z) that approximate
-%    the posterior over the model parameters and latent states 
-%    for each trace.
+%    This yields two distributions q(theta | w) and q(z) that 
+%    approximate the posterior over the model parameters and latent 
+%    states for each trace.
 %
 % 2. Update the hyperparameters for the distribution p(theta | u).
 %
@@ -136,7 +136,7 @@ ip.addParamValue('display', 'off', ...
 ip.addParamValue('vbem', struct(), @isstruct);
 ip.parse(data, u0, mu0, varargin{:});
 
-% try
+try
     % collect inputs
     args = ip.Results;
     data = args.data;
@@ -294,11 +294,10 @@ ip.parse(data, u0, mu0, varargin{:});
     L = sL(1:it);
     u = u(it,:);
     omega = omega(it);
-% catch ME
-%     % ok something went wrong here, so dump workspace to disk for inspection
-%     day_time =  datestr(now, 'yymmdd-HH.MM');
-%     save_name = sprintf('crashdump-eb-%s.mat', day_time);
-%     save(save_name);
-
-%     rethrow(ME);
-% end
+catch ME
+    % ok something went wrong here, so dump workspace to disk for inspection
+    day_time =  datestr(now, 'yymmdd-HH.MM');
+    save_name = sprintf('crashdump-eb_shmm-%s.mat', day_time);
+    save(save_name);
+    rethrow(ME);
+end
