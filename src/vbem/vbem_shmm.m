@@ -138,15 +138,25 @@ for it = 1:args.max_iter
     % NOTE: technically this is part of the M-step, but we will
     % calculate the lower bound L to check for convergence before
     % updating the variational parameters w
-    if size(u.A, 1) == 1
+    if size(E_ln_A, 1) == 1
         % if only one prior on A is specified for all states,
         % duplicate the expectation value K times
         A = ones(K,1) * exp(E_ln_A);
-    else
-        A = exp(E_ln_A);
+    elseif size(E_ln_A, 1) == 3
+        % if only 3 priors on A are specified, assume separate priors 
+        % for first and last states and shared prior for all states in
+        % between
+        A = cat(1, exp(E_ln_A(1, :)), ...
+                   ones(K-2, 1) * exp(E_ln_A(2,:)), ...
+                   exp(E_ln_A(end, :)));
     end
     [g, xi, ln_Z] = forwback_banded(exp(E_ln_px_z), A, ...
                                     [1 zeros(1, K-1)]', [0 1]);  
+
+    % hack: add a single count to the last forward transition
+    % (we're assuming a step to position K+1 occurs at the end 
+    % of the trajectory)
+    xi(end, 2) = 1;
 
     % COMPUTE LOWER BOUND L
     %

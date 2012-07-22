@@ -17,10 +17,18 @@ function w = m_step_shmm(u, x, g, xi, mu0)
     % Update for A
     %
     % w.A(k, l) = u.A(k, l) + sum_t xi(t, k, l)
-    if size(u.A, 1) == K
-        w.A = u.A + xi;
-    else
+    if size(u.A, 1) == 1
+        % if a single prior is specified for all states,
+        % add all counts from all states to posterior
         w.A = u.A + sum(xi, 1);
+    elseif size(u.A, 1) == 3
+        % if a three priors are present, assume first and last
+        % rows specify separate priors for first and last state
+        w.A(1,:) = u.A(1,:) + xi(1,:);
+        w.A(2,:) = u.A(2,:) + sum(xi(2:end-1,:));
+        w.A(3,:) = u.A(3,:) + xi(end,:);
+    else
+        w.A = u.A + xi;
     end
 
     % g0(t,k) = g(t,k) / G(k)
