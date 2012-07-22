@@ -29,14 +29,14 @@ function alpha = hstep_dir(w_alpha, weights)
 transposed = false;
 if iscell(w_alpha)
     N = length(w_alpha);
-    if prod(size(w_alpha{1})) == length(w_alpha{1})
-        L = 1;
-        K = length(w_alpha{1});
-        w_alpha = reshape(cat(3, w_alpha{:}), [L K N]);
+    [L K] = size(w_alpha{1});
+    w_alpha = cat(3, w_alpha{:});
+    if (K == 1) & (L > 1)
+        % assume that vector valued input means L=1, 
+        % and swap K with L
+        [L K] = deal(K, L);
+        w_alpha = reshape(w_alpha, [L K N]);
         transposed = true;
-    else
-        [L K] = size(w_alpha{1});
-        w_alpha = cat(3, w_alpha{:});
     end
 else
     if ndims(w_alpha) == 3
@@ -114,5 +114,5 @@ end
 
 % ensure output has same shape as input
 if transposed 
-    alpha = reshape(alpha, [K 1]);
+    alpha = reshape(alpha, [1 K]);
 end
