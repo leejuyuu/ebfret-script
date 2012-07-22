@@ -105,7 +105,7 @@ mu0 = args.mu0;
 
 % get dimensions
 [T D] = size(x);
-K = size(u.A, 1);
+K = size(mu0, 1);
 
 % set w to initial guess
 w = w0;
@@ -138,7 +138,15 @@ for it = 1:args.max_iter
     % NOTE: technically this is part of the M-step, but we will
     % calculate the lower bound L to check for convergence before
     % updating the variational parameters w
-    [g, xi, ln_Z] = forwback_banded(exp(E_ln_px_z), exp(E_ln_A), [1 zeros(1, K-1)]', [0 1]);  
+    if size(u.A, 1) == 1
+        % if only one prior on A is specified for all states,
+        % duplicate the expectation value K times
+        A = ones(K,1) * exp(E_ln_A);
+    else
+        A = exp(E_ln_A);
+    end
+    [g, xi, ln_Z] = forwback_banded(exp(E_ln_px_z), A, ...
+                                    [1 zeros(1, K-1)]', [0 1]);  
 
     % COMPUTE LOWER BOUND L
     %
