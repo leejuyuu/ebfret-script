@@ -34,7 +34,8 @@ function [u, L, vb, omega] = eb_shmm(data, u0, mu0, varargin)
 %     p(theta | u) over the model parameters.
 %
 %       .A : K x 2
-%           Dirichlet prior on self and forward transitions
+%           Dirichlet prior on self and forward transitions. If K = 1, 
+%           the prior is assumed to be identical for all states
 %       .dmu : scalar
 %           Normal-Wishart prior - state offset 
 %       .beta : scalar
@@ -144,7 +145,7 @@ ip.parse(data, u0, mu0, varargin{:});
     % get dimensions
     N = length(data);
     M = length(u0);
-    K = size(u0(1).A,1);
+    K = size(mu0, 1);
 
     converged = false;
     it = 1;

@@ -17,7 +17,11 @@ function w = m_step_shmm(u, x, g, xi, mu0)
     % Update for A
     %
     % w.A(k, l) = u.A(k, l) + sum_t xi(t, k, l)
-    w.A = u.A + xi;
+    if size(u.A, 1) == K
+        w.A = u.A + xi;
+    else
+        w.A = u.A + sum(xi, 1);
+    end
 
     % g0(t,k) = g(t,k) / G(k)
     g0 = bsxfun(@rdivide, g, T);
