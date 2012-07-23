@@ -44,6 +44,11 @@ function w = init_w_shmm(x, u, varargin)
     theta.dmu = mvnrnd(u.dmu, inv(u.beta * theta.Lambda));
     % draw transition matrix from dirichlet
     theta.A = dirrnd(u.A);
+    % check draws for NaN (possible if u.A close to zero)
+    if any(isnan(theta.A))
+        theta.A(isnan(theta.A)) = 1;
+        theta.A = normalize(theta.A, 2);
+    end
 
     % add draw A ~ Dir(u.A) to prior with count (T-1)/K for each row  
     if size(u.A, 1) == 1
