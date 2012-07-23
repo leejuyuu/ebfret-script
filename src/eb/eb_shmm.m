@@ -1,5 +1,5 @@
 function [u, L, vb, omega] = eb_shmm(data, u0, mu0, varargin)
-% [u, L, vb, omega] = eb_shmm(data, u0)
+% [u, L, vb, omega] = eb_shmm(data, u0, mu0, varargin)
 %
 % Runs a empirical Bayes inferenceon a collection of single 
 % molecule time series using a Stepping Hidden Markov Model.
@@ -33,7 +33,7 @@ function [u, L, vb, omega] = eb_shmm(data, u0, mu0, varargin)
 %     Initial guesses for hyperparameters of the ensemble distribution
 %     p(theta | u) over the model parameters.
 %
-%       .A : K x 2
+%       .A : K x L
 %           Dirichlet prior on self and forward transitions. If K = 1, 
 %           the prior is assumed to be identical for all states
 %       .dmu : scalar
@@ -50,6 +50,9 @@ function [u, L, vb, omega] = eb_shmm(data, u0, mu0, varargin)
 %   w0 : (N x M) or (N x 1) struct (optional)
 %     Intial guesses for variational parameters. 
 %    
+%   d : 1 x L
+%     Indices of accessible states relative to current state
+%     corresponding to the columns of u0.A
 %
 % Variable Inputs
 % ---------------
@@ -125,7 +128,8 @@ ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);
 ip.addRequired('mu0', @isnumeric);
-ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'mu'));
+ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'dmu'));
+ip.addOptional('d', [], @isnumeric);
 ip.addParamValue('threshold', 1e-5, @isscalar);
 ip.addParamValue('max_iter', 100, @isscalar);
 ip.addParamValue('restarts', 10, @isscalar);
@@ -141,11 +145,18 @@ try
     args = ip.Results;
     data = args.data;
     u0 = args.u0;
+    d = args.d;
 
     % get dimensions
     N = length(data);
     M = length(u0);
     K = size(mu0, 1);
+
+    % check if d specified
+    if ~length(d)
+        % assume d = [0 1 ... K-1]
+        d = 0:size(u0.A,2)-1;
+    end
 
     converged = false;
     it = 1;
@@ -172,7 +183,7 @@ try
             if (it == 1)
                 switch length(args.w0(:))
                     case N*M
-                        [w0(:, :, 1)] =  args.w0;
+                        [w0(:, :, 1)] =  reshape(args.w0, [N M]);
                     case N
                         for m = 1:M
                             [w0(:, m, 1)] =  args.w0(:);
