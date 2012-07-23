@@ -1,5 +1,5 @@
-function [u, L, vb, omega] = eb_shmm(data, u0, mu0, varargin)
-% [u, L, vb, omega] = eb_shmm(data, u0, mu0, varargin)
+function [u, L, vb, omega] = eb_shmm(data, u0, mu0, d, varargin)
+% [u, L, vb, omega] = eb_shmm(data, u0, mu0, d, varargin)
 %
 % Runs a empirical Bayes inferenceon a collection of single 
 % molecule time series using a Stepping Hidden Markov Model.
@@ -128,8 +128,8 @@ ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);
 ip.addRequired('mu0', @isnumeric);
-ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'dmu'));
 ip.addOptional('d', [], @isnumeric);
+ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'dmu'));
 ip.addParamValue('threshold', 1e-5, @isscalar);
 ip.addParamValue('max_iter', 100, @isscalar);
 ip.addParamValue('restarts', 10, @isscalar);

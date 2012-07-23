@@ -1,4 +1,4 @@
-function [w, L, stat] = vbem_shmm(x, w0, u, mu0, d, varargin)
+function [w, L, stat] = vbem_shmm(x, w0, u, mu0, varargin)
 % vbem_shmm(x, w0, u, mu0, varargin)
 %
 % Variational Bayes Expectation Maximization for a Stepping Hidden 
