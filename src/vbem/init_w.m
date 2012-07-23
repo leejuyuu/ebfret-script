@@ -65,6 +65,18 @@ function w = init_w(x, u, varargin)
     % draw mixture weights from dirichlet
     theta.pi = dirrnd(u.pi(:)', 1)';
 
+    % draw transition matrix from dirichlet
+    theta.A = dirrnd(u.A);
+
+    % check draws for NaN (possible if u.pi or u.A close to zero)
+    if any(isnan(theta.pi))
+        theta.pi = ones(size(theta.pi)) / length(theta.pi);
+    end
+    if any(isnan(theta.A))
+        theta.A(isnan(theta.A)) = 1;
+        theta.A = normalize(theta.A, 2);
+    end
+    
     for k = 1:K
         % draw precision matrix from wishart
         Lambda = wishrnd(u.W(k, :, :), u.nu(k));
@@ -150,9 +162,6 @@ function w = init_w(x, u, varargin)
                     'soft kmeans step did not converge');
         end
     end
-
-    % draw transition matrix from dirichlet
-    theta.A = dirrnd(u.A);
 
     % add pi to prior with count 1
     w.pi = u.pi + theta.pi;
