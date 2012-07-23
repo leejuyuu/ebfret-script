@@ -1,5 +1,5 @@
-function  [gamma, xi, ln_Z] = forwback_banded(px_z, a, pi, d)
-% [gamma, xi, ln_Z] = forwback_banded(px_z, a, pi)
+function  [gamma, xi, ln_Z] = forwback_banded(px_z, A, d, alpha_1, beta_T)
+% [gamma, xi, ln_Z] = forwback_banded(px_z, A, d, alpha_1, beta_T)
 %          
 % Performs forward-backward message passing for HMMs.
 % 
@@ -10,7 +10,7 @@ function  [gamma, xi, ln_Z] = forwback_banded(px_z, a, pi, d)
 %       Observation likelihood p(x(t) | z(t)=k, theta) = px_z(t, k) 
 %       given the latent state at each time point.
 %
-%   a : K x L 
+%   A : K x L 
 %       Transition probabilities for states
 %
 %         a(k, l) = p(z(t+1)=k+d(l) | z(t)=k, theta)
@@ -22,13 +22,14 @@ function  [gamma, xi, ln_Z] = forwback_banded(px_z, a, pi, d)
 %       However, the probability mass assigned to the transitions 
 %       does imply a lower log likelihood p(x(1:T) | theta).
 %
-%   pi : K x 1
-%       Prior probabilities for states
-%
-%         p(z(1)=k | theta)  =  pi(k)
-%
 %   d : L x 1
 %       Indices for diagonals.
+%
+%   alpha_1 : K x 1, optional
+%       Weights for state at t=1
+%
+%   beta_T : K x 1, optional
+%       Weights for state at t=T
 %
 % Outputs
 % -------
@@ -48,10 +49,13 @@ function  [gamma, xi, ln_Z] = forwback_banded(px_z, a, pi, d)
 % $Revision: 1.2$  $Date: 2011/08/08$
 
 % get number of columns in banded transition matrix
-L = size(a,2);
+L = size(A, 2);
+
+% get number of time points and number of states
+[T, K] = size(px_z);
 
 % assume columns of A centered around diagonal if d unspecified
-if nargin < 4
+if nargin < 3
   if mod(L, 2)
     d = -0.5*(L-1):0.5*(L-1);
   else
@@ -59,8 +63,18 @@ if nargin < 4
   end
 end
 
-% get dimensions
-[T, K] = size(px_z);
+if nargin < 4
+  alpha_1 = ones(K, 1);
+else
+  alpha_1 = alpha_1(:);
+end
+
+if nargin < 5
+  beta_T = ones(K, 1);
+else
+  beta_T = beta_T(:);
+end
+
 
 % if specified transition probabilities are such that a
 % trajectory can go out of bounds, the we need to pad the
@@ -68,34 +82,33 @@ end
 pad = [0 0];
 for l = 1:length(d)
   if d(l) < 0
-    pad(1) = abs(min(min((a(:,l) > 0) .* ...
+    pad(1) = abs(min(min((A(:,l) > 0) .* ...
                          (d(l):K+d(l)-1)'), ...
                      -pad(1)));
   end
   if d(l) > 0
-    pad(2) = max(max((a(:,l) > 0) .* ...
+    pad(2) = max(max((A(:,l) > 0) .* ...
                      (d(l)-K+1:d(l))'), ...
                  pad(2));
   end
 end
 
-% pad px_z with zeros
+% pad px_z, alpha_1 and beta_T with zeros
 px_z = cat(2, zeros(T, pad(1)), px_z, zeros(T, pad(2)));
+alpha_1 = cat(1, zeros(pad(1),1), alpha_1, zeros(pad(2),1));
+beta_T = cat(1, zeros(pad(1),1), beta_T, zeros(pad(2),1));
 
-% pad pi with zeros
-pi = cat(1, zeros(pad(1),1), pi, zeros(pad(2),1));
-
-% realign diagonals in a
-a = cat(1, zeros(pad(1), length(d)), a, zeros(pad(2), length(d)));
+% realign diagonals in A
+A = cat(1, zeros(pad(1), length(d)), A, zeros(pad(2), length(d)));
 for l = 1:length(d)
-  a(:,l) = circshift(a(:,l), d(l)); 
+  A(:,l) = circshift(A(:,l), d(l)); 
 end
 
 % adjust numer of states
 K = K + sum(pad);
 
 % construct sparse transition matrix
-A = spdiags(a, d, zeros(K));
+A = spdiags(A, d, zeros(K));
 
 % Forward backward message passing  
 %                           
@@ -107,7 +120,7 @@ beta = zeros(T,K);
 c = zeros(T,1);
 
 % Forward pass (with scaling)
-alpha(1,:) = pi' .* px_z(1, :);
+alpha(1,:) = alpha_1' .* px_z(1, :);
 c(1) = sum(alpha(1, :));
 alpha(1,:) = alpha(1, :) ./ c(1); 
 for t=2:T
@@ -119,9 +132,16 @@ for t=2:T
   alpha(t,:) = alpha(t,:) ./ c(t); 
   % note: prod(c(1:t)) = p(x(1:t))
 end
-  
-% Backward pass (with scaling)
-beta(T,:) = ones(1, K);
+
+% assign backward sweep variable for last time point
+beta(T,:) = beta_T';
+
+% correct last point to reflect pinning beta_T
+alpha(T,:) = alpha(T,:) .* beta(T, :) * c(T);
+c(T) = sum(alpha(T, :));
+alpha(T,:) = alpha(T,:) / c(T);
+
+% Backward pass (with scaling)  
 for t=T-1:-1:1
   % beta(t, k) = sum_l p(x(t+1) | z(t)=l) A(k, l) beta(t+1, l) 
   beta(t, :) = (beta(t+1,:) .* px_z(t+1,:)) * A' / c(t+1);  

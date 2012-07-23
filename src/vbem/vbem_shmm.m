@@ -150,8 +150,8 @@ for it = 1:args.max_iter
                    ones(K-2, 1) * exp(E_ln_A(2,:)), ...
                    exp(E_ln_A(end, :)));
     end
-    [g, xi, ln_Z] = forwback_banded(exp(E_ln_px_z), A, ...
-                                    [1 zeros(1, K-1)]', [0 1]);  
+    [g, xi, ln_Z] = forwback_banded(exp(E_ln_px_z), A, [0 1], ...
+                                    [1 zeros(1, K-1)], [zeros(1, K-1) 1]);  
 
     % hack: add a single count to the last forward transition
     % (we're assuming a step to position K+1 occurs at the end 
