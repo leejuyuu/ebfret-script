@@ -151,12 +151,15 @@ for it = 1:args.max_iter
                    exp(E_ln_A(end, :)));
     end
     [g, xi, ln_Z] = forwback_banded(exp(E_ln_px_z), A, [0 1], ...
-                                    [1 zeros(1, K-1)], [zeros(1, K-1) 1]);  
+                                    [1 zeros(1, K-1)], ones(1, K));  
 
-    % hack: add a single count to the last forward transition
-    % (we're assuming a step to position K+1 occurs at the end 
-    % of the trajectory)
-    xi(end, 2) = 1;
+    if g(end,end) == max(g(end,:))
+        % hack: if end state is reached, add a single count to the last 
+        % forward transition (this is equivalent to assuming the motor
+        % stepped beyond the last state in the time point after the
+        % last observed time point) 
+        xi(end, 2) = 1;
+    end
 
     % COMPUTE LOWER BOUND L
     %
