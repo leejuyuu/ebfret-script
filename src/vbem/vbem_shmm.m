@@ -1,4 +1,4 @@
-function [w, L, stat] = vbem_shmm(x, w0, u, mu0, varargin)
+function [w, L, stat] = vbem_shmm(x, w0, u, mu0, d, varargin)
 % vbem_shmm(x, w0, u, mu0, varargin)
 %
 % Variational Bayes Expectation Maximization for a Stepping Hidden 
@@ -20,7 +20,7 @@ function [w, L, stat] = vbem_shmm(x, w0, u, mu0, varargin)
 %   u : struct 
 %       Hyperparameters for the prior distribution p(theta | u)
 %
-%       .A : K x 2
+%       .A : K x L
 %           Dirichlet prior on self and forward transitions
 %       .dmu : scalar
 %           Normal-Wishart prior - state offset 
@@ -38,6 +38,10 @@ function [w, L, stat] = vbem_shmm(x, w0, u, mu0, varargin)
 %   w0 : struct 
 %       Initial guess for the variational parameters of the 
 %       approximating posterior q(theta | w). Same fields as u
+%
+%   d : 1 x L
+%       Indices of accessible states relative to current state
+%       corresponding to the columns of u0.A
 %
 % Variable Inputs
 % ---------------
@@ -90,6 +94,7 @@ ip.addRequired('x', @(x) isnumeric(x) & (ndims(x)==2));
 ip.addRequired('w0', @isstruct);
 ip.addRequired('u', @isstruct);
 ip.addRequired('mu0', @isnumeric);
+ip.addOptional('d', [], @isnumeric);
 ip.addParamValue('threshold', 1e-5, @isscalar);
 ip.addParamValue('max_iter', 100, @isscalar);
 ip.addParamValue('ignore', 'none', ...
@@ -102,10 +107,17 @@ x = args.x;
 w0 = args.w0;
 u = args.u;
 mu0 = args.mu0;
+d = args.d;
 
 % get dimensions
 [T D] = size(x);
 K = size(mu0, 1);
+
+% check if d specified
+if ~length(d)
+    % assume d = [0 1 ... K-1]
+    d = 0:size(u.A,2)-1;
+end
 
 % set w to initial guess
 w = w0;
@@ -149,8 +161,10 @@ for it = 1:args.max_iter
         A = cat(1, exp(E_ln_A(1, :)), ...
                    ones(K-2, 1) * exp(E_ln_A(2,:)), ...
                    exp(E_ln_A(end, :)));
+    else
+        A = exp(E_ln_A);
     end
-    [g, xi, ln_Z] = forwback_banded(exp(E_ln_px_z), A, [0 1], ...
+    [g, xi, ln_Z] = forwback_banded(exp(E_ln_px_z), A, d, ...
                                     [1 zeros(1, K-1)], ones(1, K));  
 
     if g(end,end) == max(g(end,:))
