@@ -46,7 +46,17 @@ function w = init_w_shmm(x, u, varargin)
     theta.A = dirrnd(u.A);
 
     % add draw A ~ Dir(u.A) to prior with count (T-1)/K for each row  
-    w.A = u.A + theta.A .* (T-1) ./ K;
+    if size(u.A, 1) == 1
+        w.A = u.A + theta.A .* (T-1);
+    else
+        w.A = zeros(size(u.A));
+        % one count for first state
+        w.A(1, :) = u.A(1, :) + theta.A(1, :);
+        % one count for last state
+        w.A(end, :) = u.A(end, :) + theta.A(end, :);
+        % remaining counts in middle
+        w.A(2:end-1, :) = u.A(2:end-1, :) + theta.A(2:end-1, :) * (T-3) / (K-2);
+    end
 
     % add T/K counts to beta and nu
     w.beta = u.beta + T;

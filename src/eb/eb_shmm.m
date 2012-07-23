@@ -229,12 +229,21 @@ try
                 for r = 1:R
                     [w_, L_, s_] = vbem_shmm(data{n}, w0(n, m, r), u(it, m), (1:K)', args.vbem);
                     % keep result if L better than previous restarts
-                    if L_(end) > L(it, n, m)
+                    if L_(end) > L(it, n, m) 
                         w_it{n, m} = w_;
                         s_it{n, m} = s_;
                         L(it, n, m) = L_(end);
                         restart(n, m) = r;
+                    elseif r == 1
+                        % run did not converge, so store initial guess
+                        w_it{n, m} = w0(n, m, r);
+                        s_it{n, m} = s_;
+                        restart(n, m) = r;
                     end
+                end
+                if L(it, n, m) == -Inf
+                    warning('eb_shmm:VBEMNotConverged', ...
+                            'VBEM did not converge for trace %d of %d\n', n, N)
                 end
             end
         end
