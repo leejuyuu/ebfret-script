@@ -172,7 +172,10 @@ for it = 1:args.max_iter
         % forward transition (this is equivalent to assuming the motor
         % stepped beyond the last state in the time point after the
         % last observed time point) 
-        xi(end, 2) = 1;
+        l = find(d>0,1);
+        if any(l)
+            xi(end, d(l)) = 1;
+        end
     end
 
     % COMPUTE LOWER BOUND L
