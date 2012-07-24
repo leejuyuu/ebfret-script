@@ -25,7 +25,7 @@ function w = m_step_shmm(u, x, g, xi, mu0)
         % if a three priors are present, assume first and last
         % rows specify separate priors for first and last state
         w.A(1,:) = u.A(1,:) + xi(1,:);
-        w.A(2,:) = u.A(2,:) + sum(xi(2:end-1,:));
+        w.A(2,:) = u.A(2,:) + sum(xi(2:end-1,:), 1);
         w.A(3,:) = u.A(3,:) + xi(end,:);
     else
         w.A = u.A + xi;
