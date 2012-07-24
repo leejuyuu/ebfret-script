@@ -238,7 +238,9 @@ try
             for m = 1:M
                 % loop over restarts
                 for r = 1:R
-                    [w_, L_, s_] = vbem_shmm(data{n}, w0(n, m, r), u(it, m), (1:K)', args.vbem);
+                    [w_, L_, s_] = vbem_shmm(data{n}, ...
+                                             w0(n, m, r), u(it, m), ...
+                                             (1:K)', d, args.vbem);
                     % keep result if L better than previous restarts
                     if L_(end) > L(it, n, m) 
                         w_it{n, m} = w_;
