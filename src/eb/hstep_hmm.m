@@ -112,5 +112,3 @@ u = hstep_nw(w, weights);
 u.A = hstep_dir({w.A}, weights);
 % add dirichlet updates for initial state probabilities
 u.pi = hstep_dir({w.pi}, weights);
-% ensure fields are aligned with w
-u = orderfields(u, fields(w));
