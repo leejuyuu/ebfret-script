@@ -72,13 +72,19 @@ function runs = hmi_fret_pmm_dir(x, w, u, M_values, varargin)
         % hyperparameters of each subpopulation
         for r = 1:length(M_values)
             fprintf('Initializing priors for M = %d subpopulations\n', M_values(r))
+            % initialize priors from mixture model
             runs(r).u0 = init_u_pmm_dir(M_values(r), w, u, 'display', 'all');
+            % set equal prior weight
+            [runs(r).u0.omega] = deal(1);
+            % ensure posterior counts for A are correct
             for m = 1:M_values(r)
                 runs(r).w0(:,m) = w;
                 for n = 1:length(w)
                     runs(r).w0(n,m).A = runs(r).w0(n,m).A - u.A + runs(r).u0(m).A;
                 end
             end
+            % assign posterior weight
+            [runs(r).w0.omega] = deal(1./M_values(r));
         end
 
         % run second pass inference
@@ -86,14 +92,14 @@ function runs = hmi_fret_pmm_dir(x, w, u, M_values, varargin)
             fprintf('Running HMI for M = %d subpopulations\n', M_values(m))
             
             % run inference on full dataset
-            [u, L, vb, vit, omega] = ... 
+            [u, L, vb, vit, phi] = ... 
                 hmi(x, runs(m).u0, runs(m).w0, ...
                     opts.hmi, 'vbem', opts.vbem);
             runs(m).u = u;
             runs(m).L = L;
             runs(m).vb = vb;
             runs(m).vit = vit;
-            runs(m).omega = omega;
+            runs(m).phi = phi;
         end
 
      catch ME
