@@ -137,7 +137,7 @@ ip.addParamValue('soft_kmeans', 'init', ...
 ip.addParamValue('display', 'off', ...
                   @(s) any(strcmpi(s, {'hstep', 'trace', 'off'})));
 ip.addParamValue('vbem', struct(), @isstruct);
-ip.parse(data, u0, w0, varargin{:});
+ip.parse(data, u0, varargin{:});
 
 try
     % collect inputs
@@ -197,7 +197,7 @@ try
                             end    
                             for m = 1:M
                                 % draw w0 from prior u0
-                                w0(n, m, 1) =  init_w(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
+                                w0(n, m, 1) =  init_w_hmm(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
                                 % set prior on mixture components
                                 w0(n, m, 1).omega = 1/M + u0(m).omega;
                             end
@@ -214,7 +214,7 @@ try
                 for n = 1:N
                     for m = 1:M
                         % draw w0 from prior u for other restarts
-                        w0(n, m, r) = init_w(data{n}, u(it, m), 'soft_kmeans', soft_kmeans);
+                        w0(n, m, r) = init_w_hmm(data{n}, u(it, m), 'soft_kmeans', soft_kmeans);
                         % set prior on mixture components
                         w0(n, m, r).omega = 1/M + u(it, m).omega;
                     end
@@ -242,7 +242,7 @@ try
             for m = 1:M
                 % loop over restarts
                 for r = 1:R
-                    [w_, L_, stat_] = vbem_hmm(data{n}, w0(n, m, r), u(it, m), args.vbem);
+                     [w_, L_, stat_] = vbem_hmm(data{n}, w0(n, m, r), u(it, m), args.vbem);
                     % keep result if L better than previous restarts
                     if L_(end) > L(it, n, m)
                         w(it, n, m) = w_;
@@ -313,16 +313,17 @@ try
         end
 
         % run hierarchical updates
+        clear u_;
         for m = 1:M
-            u(it+1, m) = hstep_hmm(w(it, :, m), u(it, m), phi(:, m));
+            u_(m) = hstep_hmm(w(it, :, m), phi(:, m));
         end
-
         % update prior on mixture component size, if necessary
         if isfield(u, 'omega')
             w_omega = permute(reshape([w(it,:,:).omega], size(w(it,:,:))), [1 3 2]);
             u_omega = num2cell(hstep_dir(w_omega));
-            u.omega = deal(u_omega{:});
+            [u_.omega] = deal(u_omega{:});
         end
+        u(it+1, :) = orderfields(u_(:), fieldnames(u));
 
         % proceed with next iteration
         it = it + 1;
