@@ -12,7 +12,7 @@ function w = init_w(x, u, varargin)
     %   Signal to learn posterior from.
     %
     % u : struct
-    %   Hyperparameters for VBEM/HMI algorithm
+    %   Hyperparameters for VBEM/EB algorithm
     %
     %
     % Variable Inputs
@@ -65,6 +65,18 @@ function w = init_w(x, u, varargin)
     % draw mixture weights from dirichlet
     theta.pi = dirrnd(u.pi(:)', 1)';
 
+    % draw transition matrix from dirichlet
+    theta.A = dirrnd(u.A);
+
+    % check draws for NaN (possible if u.pi or u.A close to zero)
+    if any(isnan(theta.pi))
+        theta.pi = ones(size(theta.pi)) / length(theta.pi);
+    end
+    if any(isnan(theta.A))
+        theta.A(isnan(theta.A)) = 1;
+        theta.A = normalize(theta.A, 2);
+    end
+    
     for k = 1:K
         % draw precision matrix from wishart
         Lambda = wishrnd(u.W(k, :, :), u.nu(k));
@@ -98,37 +110,6 @@ function w = init_w(x, u, varargin)
     
     % refine centers using a gaussian mixture model (soft kmeans)
     if args.soft_kmeans
-        % if K > 1
-        %     % specify initial parameter values as gmdistribution struct
-        %     gmm0.PComponents = theta0.pi(:)';
-        %     gmm0.mu = theta0.mu;
-        %     gmm0.Sigma = theta0.Sigma;        
-
-        %     % silence convergence warnings
-        %     if args.quiet
-        %         warn = warning('off', 'stats:gmdistribution:FailedToConverge');
-        %     end
-        
-        %     % run soft kmeans
-        %     gmm = gmdistribution.fit(x, K, 'Start', gmm0, ...
-        %                              'CovType', 'diagonal', 'Regularize', 1e-6, ...
-        %                              'Options', struct('Tolerance', args.threshold));
-
-        %     % unsilence convergence warnings
-        %     if args.quiet
-        %         warning(warn);
-        %     end
-        % else
-        %     gmm = gmdistribution.fit(x, 1, 'Regularize', 1e-6, ...
-        %                              'Options', struct('Tolerance', args.threshold));
-        % end
-        
-        % if all(isfield(gmm, {'PComponents', 'mu', 'Sigma'}))
-        %     theta0.pi = gmm.PComponents(:);
-        %     theta0.mu = gmm.mu;
-        %     theta0.Sigma = gmm.Sigma;                  
-        % end
-
         % silence convergence warnings
         if args.quiet
             warn = warning('off', 'gmm_map:joint_decreased');
@@ -150,9 +131,6 @@ function w = init_w(x, u, varargin)
                     'soft kmeans step did not converge');
         end
     end
-
-    % draw transition matrix from dirichlet
-    theta.A = dirrnd(u.A);
 
     % add pi to prior with count 1
     w.pi = u.pi + theta.pi;
