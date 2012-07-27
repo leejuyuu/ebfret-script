@@ -9,6 +9,9 @@ function w = m_step_hmm(u, x, g, xi)
     [K D] = size(u.mu);
     [T] = length(x);
 
+    % copy structure (so field order is the same)
+    w = u;
+    
     % Updates for mu, beta, W, nu
     w = m_step_nw(u, x, g);
 
@@ -21,6 +24,3 @@ function w = m_step_hmm(u, x, g, xi)
     %
     % w.A(k, l) = u.A(k, l) + sum_t xi(t, k, l)
     w.A = u.A + squeeze(sum(xi, 1));
-
-    % ensure output w has same field order as input u
-    w = orderfields(w, fields(u));
