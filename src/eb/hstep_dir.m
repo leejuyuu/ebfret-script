@@ -114,5 +114,5 @@ end
 
 % ensure output has same shape as input
 if transposed 
-    alpha = reshape(alpha, [1 K]);
+    alpha = reshape(alpha, [K 1]);
 end
