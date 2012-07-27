@@ -1,5 +1,5 @@
-function [u, L, vb, vit, omega] = eb(data, u0, w0, varargin)
-% [u, L, vb, vit, omega] = eb(data, u0)
+function [u, L, vb, vit, phi] = eb_hmm(data, u0, varargin)
+% [u, L, vb, vit, phi] = eb_hmm(data, u0, varargin)
 %
 % Runs a empirical Bayes inferenceon a collection of single 
 % molecule FRET time series (or traces) using a Hidden Markov Model.
@@ -45,6 +45,8 @@ function [u, L, vb, vit, omega] = eb(data, u0, w0, varargin)
 %     .nu : (K x 1)
 %         Normal-Wishart prior - degrees of freedom
 %         (must be equal to beta+1)
+%     .omega : scalar
+%         Dirichlet prior counts for mixture component m
 %
 %     Note: The current implementation only supports D=1 signals
 %
@@ -113,14 +115,8 @@ function [u, L, vb, vit, omega] = eb(data, u0, w0, varargin)
 %     .z : (T x 1)
 %         State index of viterbi path for every time point
 %
-%
-%   omega : struct
-%     Mixture parameters for priors
-%
-%     .gamma : (N x M)
-%         Responsibilities for each trace and mixture component
-%     .pi : (M x 1)
-%         Mixture component prior weights 
+%   phi : (N x M)
+%       Responsibilities for each trace and mixture component
 %
 % Jan-Willem van de Meent
 % $Revision: 1.0$  $Date: 2011/08/04$
@@ -154,14 +150,19 @@ try
     M = length(u0);
     K = length(u0(1).pi);
 
-    converged = false;
+    % be forgiving if prior on omega not specified for M=1
+    if (M == 1) & ~isfield(args.u0, 'omega');
+        % assign dummy prior on subpopulation size
+        u0.omega = 1;
+    end
+
     it = 1;
     u(it, :) = u0;
     clear w0;
 
     % main loop for hierarchical inference process
-    omega.pi = ones(M,1) ./ M;
-    while ~converged
+    % (note: we check for convergence in loop)
+    while true
         % initialize guesses for w    
         if (it == 1) | strcmpi(args.do_restarts, 'always')
             R = args.restarts;
@@ -195,7 +196,10 @@ try
                                          datestr(now, 'yymmdd HH:MM:SS'), K, 0, n, N);
                             end    
                             for m = 1:M
+                                % draw w0 from prior u0
                                 w0(n, m, 1) =  init_w(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
+                                % set prior on mixture components
+                                w0(n, m, 1).omega = 1/M + u0(m).omega;
                             end
                         end
                 end
@@ -211,6 +215,8 @@ try
                     for m = 1:M
                         % draw w0 from prior u for other restarts
                         w0(n, m, r) = init_w(data{n}, u(it, m), 'soft_kmeans', soft_kmeans);
+                        % set prior on mixture components
+                        w0(n, m, r).omega = 1/M + u(it, m).omega;
                     end
                 end
             end
@@ -247,14 +253,54 @@ try
             end
         end
 
-        % calculate prior mixture responsiblities for each trace
-        Lit = reshape(L(it, :, :), [N M]);
-        L0 = bsxfun(@minus, Lit , mean(Lit, 2));
-        omega(it).gamma = normalize(bsxfun(@times, exp(L0), omega(it).pi'), 2);
-        omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
+        % VBEM updates for prior mixture components
+        %
+        % y(n) ~ Mult(omega(n))
+        % omega(n) ~ Dir([u.omega])
+        %
+        % log q(y(n)) ~ Sum_m y(n,m) ( E_q(omega(n))[log omega(n,m)] + L(n,m) )
+        % log q(omega(n)) ~ Sum_m E_q(y(n))[y(n,m)] log omega(n,m)
 
-        % calculate summed evidence
-        sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
+        jt = 1;
+        sL_(jt) = -inf;
+        while true
+            % calculate log expectation value of omega under q(omega)
+            %
+            % E[log([w(n,:).omega])] = psi([w(n,:).omega]) - psi(sum([w(n,:).omega]))
+            w_omega = reshape([w(it,:,:).omega], [N M]);
+            E_ln_omega = bsxfun(@minus, psi(w_omega), psi(sum(w_omega, 2)));
+
+            % normalize evidence to avoid underflow/overflow
+            L_it = reshape(L(it, :, :), [N M]);
+            L_it0 = bsxfun(@minus, L_it , mean(L_it, 2));
+
+            % calculate log expectation value of omega under q(y)
+            %
+            % phi(n,m) = E_q(y(n)) [y(n,m)]
+            phi = exp(L_it0 + E_ln_omega);
+            phi(isinf(phi)) = 1/eps;
+            phi = normalize(phi, 2);
+            
+            % calculate summed evidence
+            sL_(jt) = sum(sum(phi .* L_it, 2), 1);
+
+            % check for convergence
+            if (jt > 1) ...
+               & (abs(1 - sL_(jt-1) / sL_(jt)) < args.threshold ...
+                  | jt > args.max_iter)
+                break;
+            end
+
+            % update w.omega
+            w_omega = num2cell(bsxfun(@plus, phi, cat(2, u(it,:).omega)));
+            [w(it,:,:).omega] = deal(w_omega{:});
+
+            % increment loop counter
+            jt = jt + 1;
+        end
+
+        % store summed evidence
+        sL(it) = sL_(jt);
 
         if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
             fprintf('[%s] eb: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
@@ -263,15 +309,19 @@ try
 
         % check for convergence
         if (it > 1) & (abs((sL(it) - sL(it-1))) < args.threshold * abs(sL(it-1)) | it > args.max_iter)
-            if sL(it) < sL(it-1)
-              it = it-1;
-            end
             break;
         end
 
         % run hierarchical updates
         for m = 1:M
-            u(it+1, m) = hstep_hmm(w(it, :, m), u(it, m), omega(it).gamma(:, m));
+            u(it+1, m) = hstep_hmm(w(it, :, m), u(it, m), phi(:, m));
+        end
+
+        % update prior on mixture component size, if necessary
+        if isfield(u, 'omega')
+            w_omega = permute(reshape([w(it,:,:).omega], size(w(it,:,:))), [1 3 2]);
+            u_omega = num2cell(hstep_dir(w_omega));
+            u.omega = deal(u_omega{:});
         end
 
         % proceed with next iteration
@@ -297,7 +347,11 @@ try
     % assign outputs
     L = sL(1:it);
     u = u(it,:);
-    omega = omega(it);
+
+    % strip omega if M=1 and not supplied
+    if (M == 1) & ~isfield(args.u0, 'omega');
+        u = rmfield(u, 'omega');
+    end
 catch ME
     % ok something went wrong here, so dump workspace to disk for inspection
     day_time =  datestr(now, 'yymmdd-HH.MM');
