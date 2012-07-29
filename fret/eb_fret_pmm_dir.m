@@ -1,7 +1,7 @@
-function runs = hmi_fret_pmm_dir(x, w, u, M_values, varargin)
-    % hmi_fret_pmm_dir(x, w, u, M_values, varargin)
+function runs = eb_fret_pmm_dir(x, w, u, M_values, varargin)
+    % eb_fret_pmm_dir(x, w, u, M_values, varargin)
     %
-    % Runs HMI inference on a set of FRET time series
+    % Runs EB inference on a set of FRET time series
     %
     %
     % Inputs
@@ -23,21 +23,15 @@ function runs = hmi_fret_pmm_dir(x, w, u, M_values, varargin)
     % Variable Inputs
     % ---------------
     %
-    % 'use_majority_states' : boolean (default: false)
-    %   If set to true, the majority_states function will be used,
-    %   i.e. the max evidence run with number of states K_max will
-    %   collapsed down to a K state solution consisting of the 
-    %   most populated states.
-    %
-    % 'max_outliers' : int (default: 1)
-    %   Filter out traces with more than specified number of time
-    %   points in outlier states when selecting majority state data.
+    % 'A_counts' : int (optional)
+    %   Normalize priors on the transition matrix for each 
+    %   subpopulation to the specified number of counts
     %
     % 'num_cpu' : int (default: 1)
     %   Number of cpu's to use
     %
-    % 'hmi' : struct
-    %   Any options to pass to hmi algorithm
+    % 'eb' : struct
+    %   Any options to pass to eb algorithm
     %
     % 'vbem' : struct
     %   Any options to pass to vbem algorithm
@@ -55,8 +49,9 @@ function runs = hmi_fret_pmm_dir(x, w, u, M_values, varargin)
     ip.addRequired('w', @isstruct);
     ip.addRequired('u', @isstruct);
     ip.addRequired('M_values', @isnumeric);
+    ip.addParamValue('A_counts', 0, @isscalar);
     ip.addParamValue('num_cpu', 1, @isscalar);
-    ip.addParamValue('hmi', struct(), @isstruct);
+    ip.addParamValue('eb', struct(), @isstruct);
     ip.addParamValue('vbem', struct(), @isstruct);
     ip.parse(x, w, u, M_values, varargin{:})
     opts = ip.Results;
@@ -76,8 +71,12 @@ function runs = hmi_fret_pmm_dir(x, w, u, M_values, varargin)
             runs(r).u0 = init_u_pmm_dir(M_values(r), w, u, 'display', 'all');
             % set equal prior weight
             [runs(r).u0.omega] = deal(1);
-            % ensure posterior counts for A are correct
             for m = 1:M_values(r)
+                % normalize prior on A if necessary
+                if opts.A_counts > 0
+                    runs(r).u0(m).A = opts.A_counts * normalize(runs(r).u0(m).A);
+                end
+                % ensure posterior counts for A are correct
                 runs(r).w0(:,m) = w;
                 for n = 1:length(w)
                     runs(r).w0(n,m).A = runs(r).w0(n,m).A - u.A + runs(r).u0(m).A;
@@ -89,12 +88,12 @@ function runs = hmi_fret_pmm_dir(x, w, u, M_values, varargin)
 
         % run second pass inference
         for m = 1:length(runs)
-            fprintf('Running HMI for M = %d subpopulations\n', M_values(m))
+            fprintf('Running EB for M = %d subpopulations\n', M_values(m))
             
             % run inference on full dataset
             [u, L, vb, vit, phi] = ... 
-                hmi(x, runs(m).u0, runs(m).w0, ...
-                    opts.hmi, 'vbem', opts.vbem);
+                eb_hmm(x, runs(m).u0, runs(m).w0, ...
+                       opts.eb, 'vbem', opts.vbem);
             runs(m).u = u;
             runs(m).L = L;
             runs(m).vb = vb;
@@ -105,7 +104,7 @@ function runs = hmi_fret_pmm_dir(x, w, u, M_values, varargin)
      catch ME
          % ok something went wrong here, so dump workspace to disk for inspection
          day_time =  datestr(now, 'yymmdd-HH.MM');
-         save_name = sprintf('crashdump-hmi_fret_pmm_dir-%s.mat', day_time);
+         save_name = sprintf('crashdump-eb_fret_pmm_dir-%s.mat', day_time);
          save(save_name);
 
          % close matlabpool if necessary
