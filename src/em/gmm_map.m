@@ -217,7 +217,7 @@ for it = 1:args.max_iter
     % M STEP: UPDATE THETA
 
     % calculate posterior parameters (same  as VBEM m step)
-    w = m_step(u, x, g);
+    w = m_step_nw(u, x, g);
 
     % get map values
     theta.pi = normalize(w.beta);
