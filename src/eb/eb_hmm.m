@@ -30,7 +30,7 @@ function [u, L, vb, vit, phi] = eb_hmm(data, u0, varargin)
 %   
 %   u0 : (M x 1) struct 
 %     Initial guesses for hyperparameters of the ensemble distribution
-%     p(theta | u) over the model parameters.
+%     p(theta | u) over the model parameters (i.e. the VBEM prior).
 %
 %     .A : (K x K)
 %         Dirichlet prior for each row of transition matrix
@@ -80,6 +80,13 @@ function [u, L, vb, vit, phi] = eb_hmm(data, u0, varargin)
 %
 %   display : {'hstep', 'trace', 'off'} (default: 'off')
 %     Print status information.
+%
+%   shared_priors : cell of {'muLambda', 'A', 'pi'} (default: {})
+%     If performing inference over a mixture of priors, this variable 
+%     specifies which priors are assumed to be shared between 
+%     populations. E.g. {'A', 'pi'} would assume a single prior on
+%     A and pi, whilst the emission model parameters mu and Lambda
+%     are assumed to have separate priors for each subpopulation.     
 %
 %   vbem : struct
 %     Struct storing variable inputs for VBEM algorithm
@@ -134,6 +141,8 @@ ip.addParamValue('do_restarts', 'init', ...
                   @(s) any(strcmpi(s, {'always', 'init'})));
 ip.addParamValue('soft_kmeans', 'init', ...
                   @(s) any(strcmpi(s, {'always', 'init', 'off'})));
+ip.addParamValue('shared_priors', {}, ...
+                  @(a) iscell(a) & all(cellfun(@(s) any(strcmpi(s, {'muLambda', 'A', 'pi'})), a)));
 ip.addParamValue('display', 'off', ...
                   @(s) any(strcmpi(s, {'hstep', 'trace', 'off'})));
 ip.addParamValue('vbem', struct(), @isstruct);
@@ -314,18 +323,37 @@ try
 
         % run hierarchical updates
         clear u_;
-        for m = 1:M
-            u_(m) = hstep_hmm(w(it, :, m), phi(:, m));
+        if any(strcmpi('muLambda', args.shared_priors))
+            [u_(1:M)] = deal(hstep_nw(reshape(w(it, :, :), [N*M 1])));
+        else
+            for m = 1:M
+                u_(m) = hstep_nw(w(it, :, m), phi(:, m));
+            end
         end
+        if any(strcmpi('A', args.shared_priors))
+            [u_(1:M).A] = deal(hstep_dir({w(it, :, :).A}));
+        else
+            for m = 1:M
+                u_(m).A = hstep_dir({w(it, :, m).A}, phi(:, m));
+            end
+        end
+        if any(strcmpi('pi', args.shared_priors))
+            [u_(1:M).pi] = deal(hstep_dir({w(it, :, :).pi}));
+        else
+            for m = 1:M
+                u_(m).pi = hstep_dir({w(it, :, m).pi}, phi(:, m));
+            end
+        end
+
         % update prior on mixture component size, if necessary
         if isfield(u, 'omega')
             w_omega = permute(reshape([w(it,:,:).omega], size(w(it,:,:))), [1 3 2]);
             u_omega = num2cell(hstep_dir(w_omega));
             [u_.omega] = deal(u_omega{:});
         end
-        u(it+1, :) = orderfields(u_(:), fieldnames(u));
 
         % proceed with next iteration
+        u(it+1, :) = orderfields(u_(:), fieldnames(u));
         it = it + 1;
     end
 
