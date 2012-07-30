@@ -68,7 +68,7 @@ threshold = 1e-6;
 opts = optimset('display', 'off', 'tolX', threshold, 'tolFun', eps);
 
 % initialize dummy weights if not specified
-if nargin < 3
+if nargin < 2
     weights = ones([1 1 N]) / N;
 elseif length(weights(:)) ~= N
     error('hstep_dir:invalidArgs', ...
