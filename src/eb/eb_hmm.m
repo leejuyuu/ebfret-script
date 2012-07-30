@@ -235,6 +235,9 @@ try
             w0(:, :, 1) = w(it-1, :, :);
         end
 
+        % ensure w0 has same field order as u
+        w0 = orderfields(w0, fieldnames(u));
+
         if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
             fprintf('[%s] eb: %d states, it %d, running VBEM\n', ...
                      datestr(now, 'yymmdd HH:MM:SS'), K, it)
@@ -251,16 +254,20 @@ try
             for m = 1:M
                 % loop over restarts
                 for r = 1:R
-                     [w_, L_, stat_] = vbem_hmm(data{n}, w0(n, m, r), u(it, m), args.vbem);
+                    [w_, L_, stat_] = vbem_hmm(data{n}, w0(n, m, r), u(it, m), args.vbem);
+                    w_.omega = w0(n, m, r).omega;
                     % keep result if L better than previous restarts
                     if L_(end) > L(it, n, m)
-                        w(it, n, m) = w_;
+                        w_it(n, m) = w_;
                         L(it, n, m) = L_(end);
                         restart(n, m) = r;
                     end
                 end
             end
         end
+
+        % ensure w has same field order as u
+        w(it,:,:) = orderfields(w_it, fieldnames(u));
 
         % VBEM updates for prior mixture components
         %
@@ -357,6 +364,12 @@ try
         it = it + 1;
     end
 
+    % strip omega if M=1 and not supplied
+    if (M == 1) & ~isfield(args.u0, 'omega');
+        u = rmfield(u, 'omega');
+        w = rmfield(w, 'omega');
+    end
+
     % place vbem output in struct 
     for n = 1:N
         for m = 1:M
@@ -376,11 +389,6 @@ try
     % assign outputs
     L = sL(1:it);
     u = u(it,:);
-
-    % strip omega if M=1 and not supplied
-    if (M == 1) & ~isfield(args.u0, 'omega');
-        u = rmfield(u, 'omega');
-    end
 catch ME
     % ok something went wrong here, so dump workspace to disk for inspection
     day_time =  datestr(now, 'yymmdd-HH.MM');
