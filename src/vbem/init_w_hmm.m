@@ -1,5 +1,5 @@
-function w = init_w(x, u, varargin)
-	% w = init_w(x, u, varargin)
+function w = init_w_hmm(x, u, varargin)
+	% w = init_w_hmm(x, u, varargin)
 	%
     % Initialization of the posterior parameters w for a trace
     % with datapoints x. Parameters are drawn from the prior and
