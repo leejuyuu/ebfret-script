@@ -45,13 +45,11 @@ function [u, L, vb, vit, phi] = eb_hmm(data, u0, varargin)
 %     .nu : (K x 1)
 %         Normal-Wishart prior - degrees of freedom
 %         (must be equal to beta+1)
-%     .omega : scalar
-%         Dirichlet prior counts for mixture component m
 %
 %     Note: The current implementation only supports D=1 signals
 %
 %   w0 : (N x M) or (N x 1) struct (optional)
-%     Intial guesses for variational parameters. 
+%     Intial guesses for VBEM variational parameters. 
 %    
 %
 % Variable Inputs
@@ -159,18 +157,10 @@ try
     M = length(u0);
     K = length(u0(1).pi);
 
-    % be forgiving if prior on omega not specified for M=1
-    if (M == 1) & ~isfield(args.u0, 'omega');
-        % assign dummy prior on subpopulation size
-        u0.omega = 1;
-    end
-
+    % main loop for empirical bayes inference process
+    % (note: we check for convergence in loop)
     it = 1;
     u(it, :) = u0;
-    clear w0;
-
-    % main loop for hierarchical inference process
-    % (note: we check for convergence in loop)
     while true
         % initialize guesses for w    
         if (it == 1) | strcmpi(args.do_restarts, 'always')
@@ -190,13 +180,14 @@ try
             % are we doing soft kmeans?
             soft_kmeans = isequal(args.soft_kmeans, 'always') | ((it == 1) & isequal(args.soft_kmeans, 'init'));
 
+            clear w0;
             if (it == 1)
                 switch length(args.w0(:))
                     case N*M
-                        [w0(:, :, 1)] =  args.w0;
+                        [w0(:, :, 1)] = orderfields(args.w0, fieldnames(u0));
                     case N
                         for m = 1:M
-                            [w0(:, m, 1)] =  args.w0(:);
+                            [w0(:, m, 1)] =  orderfields(args.w0(:), fieldnames(u0));
                         end
                     otherwise
                         for n = 1:N
@@ -207,8 +198,8 @@ try
                             for m = 1:M
                                 % draw w0 from prior u0
                                 w0(n, m, 1) =  init_w_hmm(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
-                                % set prior on mixture components
-                                w0(n, m, 1).omega = 1/M + u0(m).omega;
+                                % % set prior on mixture components
+                                % w0(n, m, 1).omega = 1/M + u0(m).omega;
                             end
                         end
                 end
@@ -224,8 +215,8 @@ try
                     for m = 1:M
                         % draw w0 from prior u for other restarts
                         w0(n, m, r) = init_w_hmm(data{n}, u(it, m), 'soft_kmeans', soft_kmeans);
-                        % set prior on mixture components
-                        w0(n, m, r).omega = 1/M + u(it, m).omega;
+                        % % set prior on mixture components
+                        % w0(n, m, r).omega = 1/M + u(it, m).omega;
                     end
                 end
             end
@@ -234,9 +225,6 @@ try
             R = 1;
             w0(:, :, 1) = w(it-1, :, :);
         end
-
-        % ensure w0 has same field order as u
-        w0 = orderfields(w0, fieldnames(u));
 
         if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
             fprintf('[%s] eb: %d states, it %d, running VBEM\n', ...
@@ -255,10 +243,9 @@ try
                 % loop over restarts
                 for r = 1:R
                     [w_, L_, stat_] = vbem_hmm(data{n}, w0(n, m, r), u(it, m), args.vbem);
-                    w_.omega = w0(n, m, r).omega;
                     % keep result if L better than previous restarts
                     if L_(end) > L(it, n, m)
-                        w_it(n, m) = w_;
+                        w(it, n, m) = w_;
                         L(it, n, m) = L_(end);
                         restart(n, m) = r;
                     end
@@ -266,50 +253,40 @@ try
             end
         end
 
-        % ensure w has same field order as u
-        w(it,:,:) = orderfields(w_it, fieldnames(u));
+        % normalize evidence to avoid underflow/overflow
+        L_it = reshape(L(it, :, :), [N M]);
+        L_it0 = bsxfun(@minus, L_it , mean(L_it, 2));
 
-        % VBEM updates for prior mixture components
-        %
-        % y(n) ~ Mult(omega(n))
-        % omega(n) ~ Dir([u.omega])
-        %
-        % log q(y(n)) ~ Sum_m y(n,m) ( E_q(omega(n))[log omega(n,m)] + L(n,m) )
-        % log q(omega(n)) ~ Sum_m E_q(y(n))[y(n,m)] log omega(n,m)
-
+        % EM updates for prior mixture components
         jt = 1;
         sL_(jt) = -inf;
+        omega = 1./M * ones(1, M);
         while true
-            % calculate log expectation value of omega under q(omega)
-            %
-            % E[log([w(n,:).omega])] = psi([w(n,:).omega]) - psi(sum([w(n,:).omega]))
-            w_omega = reshape([w(it,:,:).omega], [N M]);
-            E_ln_omega = bsxfun(@minus, psi(w_omega), psi(sum(w_omega, 2)));
-
-            % normalize evidence to avoid underflow/overflow
-            L_it = reshape(L(it, :, :), [N M]);
-            L_it0 = bsxfun(@minus, L_it , mean(L_it, 2));
-
-            % calculate log expectation value of omega under q(y)
+            % E-step: calculate exp value of y(m) under q(y),
+            % i.e. posterior p(y | x, omega)
             %
             % phi(n,m) = E_q(y(n)) [y(n,m)]
-            phi = exp(L_it0 + E_ln_omega);
-            phi(isinf(phi)) = 1/eps;
-            phi = normalize(phi, 2);
+            %          = p(y(n)=m | x(n), omega)
+            
+            % calculate joint p(y, omega)
+            p_yo = bsxfun(@times, exp(L_it0), omega);
+            % catch overflows
+            p_yo(isinf(p_yo)) = 1 / eps;
+            % normalize to get posterior
+            phi = normalize(p_yo, 2);
             
             % calculate summed evidence
             sL_(jt) = sum(sum(phi .* L_it, 2), 1);
 
             % check for convergence
-            if (jt > 1) ...
-               & (abs(1 - sL_(jt-1) / sL_(jt)) < args.threshold ...
-                  | jt > args.max_iter)
+            if ((jt > 1) ...
+                & abs(1 - sL_(jt-1) / sL_(jt)) < args.threshold) ...
+                | jt >= args.max_iter
                 break;
             end
 
-            % update w.omega
-            w_omega = num2cell(bsxfun(@plus, phi, cat(2, u(it,:).omega)));
-            [w(it,:,:).omega] = deal(w_omega{:});
+            % M-step: update omega
+            omega = normalize(sum(phi, 1));
 
             % increment loop counter
             jt = jt + 1;
@@ -319,12 +296,12 @@ try
         sL(it) = sL_(jt);
 
         if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
-            fprintf('[%s] eb: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
-                    datestr(now, 'yymmdd HH:MM:SS'), K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
+            fprintf('[%s] eb K: %d, M: %d,  it: %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
+                    datestr(now, 'yymmdd HH:MM:SS'), K, M, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
         end    
 
         % check for convergence
-        if (it > 1) & (abs((sL(it) - sL(it-1))) < args.threshold * abs(sL(it-1)) | it > args.max_iter)
+        if ((it > 1) & (abs((sL(it) - sL(it-1))) < args.threshold * abs(sL(it-1)))) | (it >= args.max_iter)
             break;
         end
 
@@ -352,22 +329,9 @@ try
             end
         end
 
-        % update prior on mixture component size, if necessary
-        if isfield(u, 'omega')
-            w_omega = permute(reshape([w(it,:,:).omega], size(w(it,:,:))), [1 3 2]);
-            u_omega = num2cell(hstep_dir(w_omega));
-            [u_.omega] = deal(u_omega{:});
-        end
-
         % proceed with next iteration
         u(it+1, :) = orderfields(u_(:), fieldnames(u));
         it = it + 1;
-    end
-
-    % strip omega if M=1 and not supplied
-    if (M == 1) & ~isfield(args.u0, 'omega');
-        u = rmfield(u, 'omega');
-        w = rmfield(w, 'omega');
     end
 
     % place vbem output in struct 
@@ -381,7 +345,7 @@ try
 
     % calculate viterbi paths
     for n = 1:N
-        m = find(bsxfun(@eq, L(it,n,:), max(L(it,n,:))));
+        m = find(phi(n,:) == max(phi(n,:)));
         [vit(n).z, vit(n).x] = viterbi_vb(w(it,n,m), data{n});
         vit(n).y = m; 
     end 
@@ -389,6 +353,7 @@ try
     % assign outputs
     L = sL(1:it);
     u = u(it,:);
+
 catch ME
     % ok something went wrong here, so dump workspace to disk for inspection
     day_time =  datestr(now, 'yymmdd-HH.MM');
