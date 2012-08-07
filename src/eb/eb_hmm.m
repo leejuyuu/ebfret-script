@@ -131,7 +131,7 @@ ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);
-ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'mu'));
+ip.addOptional('w0', struct([]), @(w) isstruct(w) & isfield(w, 'mu'));
 ip.addParamValue('threshold', 1e-5, @isscalar);
 ip.addParamValue('max_iter', 100, @isscalar);
 ip.addParamValue('restarts', 10, @isscalar);
