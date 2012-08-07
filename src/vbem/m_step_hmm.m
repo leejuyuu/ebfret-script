@@ -9,9 +9,6 @@ function w = m_step_hmm(u, x, g, xi)
     [K D] = size(u.mu);
     [T] = length(x);
 
-    % copy structure (so field order is the same)
-    w = u;
-    
     % Updates for mu, beta, W, nu
     w = m_step_nw(u, x, g);
 
