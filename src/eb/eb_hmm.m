@@ -205,7 +205,7 @@ try
                 end
             else
                 % use value from previous iteration
-                w0(:, :, 1) = w(it-1, :, :);
+                w0(:, :, 1) = reshape(w(it-1, :, :), [N M]);
             end
 
             % additional restarts use a randomized guess for the
@@ -223,7 +223,7 @@ try
         else
             % only do one restart and use w from last iteration as guess
             R = 1;
-            w0(:, :, 1) = w(it-1, :, :);
+            w0(:, :, 1) = reshape(w(it-1, :, :), [N M]);
         end
 
         if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
