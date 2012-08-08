@@ -93,23 +93,31 @@ E_q = exp(E_log_q);
 % alpha(l,:) solve system of equations
 alpha = mean(w_alpha, 3);
 for l = 1:L
+    % ignore elements with a zero mean
+    kdxs = find(alpha(l,:));
+    alpha_l = alpha(l, kdxs);
+    E_log_q_l = E_log_q(l, kdxs);
+    E_q_l = E_q(l, kdxs);
+    
     % get amplitude in right ballpark first
-    root_fun = @(A) (E_log_q(l,:) - (psi(A * alpha(l,:)) ...
-                     - psi(sum(A * alpha(l,:))))) ...
-                    .* (E_q(l,:) + eps);
+    root_fun = @(A) (E_log_q_l - (psi(A * alpha_l) ...
+                     - psi(sum(A * alpha_l)))) .* E_q_l;
     A = lsqnonlin(root_fun, 1, 0, Inf, opts);
-    alpha(l,:) = A * alpha(l,:);
+    alpha_l = A * alpha_l;
 
     % now do all components
-    al_old = eps * ones(size(alpha(l,:)));
-    while kl_dir(alpha(l,:), al_old) > threshold
-        al_old = alpha(l,:);
-        for k = 1:K
-            a0 = sum(alpha(l,:) .* (k ~= 1:K));
-            root_fun = @(alk) (E_log_q(l,k) - (psi(alk) - psi(alk + a0))); 
-            alpha(l,k) = lsqnonlin(root_fun, alpha(l,k), 0, Inf, opts);
+    al_old = eps * ones(size(alpha_l));
+    while kl_dir(alpha_l, al_old) > threshold
+        al_old = alpha_l;
+        for k = 1:length(kdxs)
+            a0 = sum(alpha_l .* (k ~= 1:length(kdxs)));
+            root_fun = @(alk) (E_log_q_l(k) - (psi(alk) - psi(alk + a0))); 
+            alpha_l(k) = lsqnonlin(root_fun, alpha_l(k), 0, Inf, opts);
         end
     end
+    
+    % substitute non-zero elements back in
+    alpha(l,kdxs) = alpha_l;
 end
 
 % ensure output has same shape as input
