@@ -1,5 +1,5 @@
-function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
-	% [u, g, L] = pmm_dir(Xi, u0, pi0)
+function [u, g, L, exitflag] = pmm_dir(Xi, u0, pi0, varargin)
+	% [u, g, L, exitflag] = pmm_dir(Xi, u0, pi0, varargin)
 	%
 	% Mixture model for Dirichlet priors.  
 	%
@@ -16,6 +16,15 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 	%	pi0 : (K x 1)
 	%		Initial guess for mixture weights
 	%
+	% Variable Inputs
+	% ---------------
+	%
+	%	max_iter : int (default: 100)
+	%		Maximum number of iterations
+	%
+	%	threshold : double (default: 1e-5)
+	%		Convergence threshold
+	%	
 	% Outputs
 	% -------
 	%
@@ -38,6 +47,22 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 	%
 	% TODO: write up math and document this properly
 
+	% parse inputs
+	ip = inputParser();
+	ip.StructExpand = true;
+	ip.addRequired('Xi', @isnumeric);
+	ip.addRequired('u0', @isnumeric);
+	ip.addRequired('pi0', @isnumeric);
+	ip.addParamValue('threshold', 1e-5, @isscalar);
+	ip.addParamValue('max_iter', 100, @isscalar);
+	ip.parse(Xi, u0, pi0, varargin{:});
+
+	% collect inputs
+	args = ip.Results;
+	Xi = args.Xi;
+	u0 = args.u0;
+	pi0 = args.pi0;
+
 	% print debug output
 	Debug = false;
 
@@ -57,8 +82,6 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 	u0(u0 == 0) = eps;
 
  	% set up for first iteration
-	threshold = 1e-6;
-	maxiter = 500;
 	L = [-inf];
 	it = 1;
 	p_new = pi0(:);
@@ -66,11 +89,13 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 	exitflag = 1;
 
 	% iterate EM steps until log likelihood L converges
-	while (it == 1) | (((L(it) - L(it-1)) > threshold * abs(L(it))) & (it < maxiter))
-		% if it > 1
-        %    fprintf('%.1e, %.1e\n', (L(it) - L(it-1)) / abs(L(it)), sum(u_new(:)))
-        % end
-        
+	while (it == 1) | ...
+		  (((L(it) - L(it-1)) > args.threshold * abs(L(it))) ...
+		   & (it < args.max_iter))
+		if it > 1
+			fprintf('[debug] it: %d  1 - L(it-1)/L(it): %.2e\n', it, 1 - L(it-1)/L(it));
+		end
+
 		% E-step: calculate responsibilities
 
 		% calculate log of p(w(n,:) | u(k,:), z=k) = Beta(w) / Beta(u)
@@ -96,7 +121,7 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 			u = u_new;
 			g = g_new;
 			p = p_new;
-		elseif L(it) - L_new > threshold * abs(L_new)
+		elseif L(it) - L_new > args.threshold * abs(L_new)
 			warning('pmm_dir:DecreasedL', 'Log likelihood decreased by %e', L_new-L(it))
 			% set exitflag to likelihood decrease on last iter
 			exitflag = -1;
@@ -139,19 +164,22 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 		Xi0 = sum(Xi, 3);
 
 		% set optimization settings
-		EPS = 10 .* eps;
 		opts = optimset('display', 'off', ...
-		                'tolX', 1e-9, ...
+		                'tolX', 1e-2 * args.threshold, ...
 		                'tolFun', eps);
-		                %'algorithm', 'trust-region-reflective');
 
 		% solve u for each mixture component
 		for k = 1:K
 			for e = 1:E
 				% solve for each d separately until convergence
 				u_ke = eps * ones(size(u_new(k,e,:)));
-				while kl_dir(u_new(k,e,:), u_ke) > 1e-2
-					u_ke = u_new(k,e,:);
+				jt = 1;
+				kl = zeros(args.max_iter, 1);
+				kl(1) = kl_dir(u_new(k,e,:), u_ke);
+				while (jt == 1) | ...
+					  ((abs(kl(jt-1) - kl(jt)) > 1e2 * args.threshold * kl(jt)) ...
+					   & (jt < args.max_iter))
+					u_ke_prev = u_new(k,e,:);
 					for d = 1:D
 						% sum u over all indices except d
 						u_ke0 = sum(squeeze(u_new(k,e,:)) .* (d ~= 1:D)');;
@@ -165,7 +193,10 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 						    lsqnonlin(root_fun_ked, ... 
 						    	      u_new(k,e,d), 0, Inf, opts);
 					end
+					kl(jt+1) = kl_dir(u_new(k,e,:), u_ke_prev);
+					jt = jt+1;
 				end
+				fprintf('[debug] it: %d k: %d e: %d jt: %d\n', it, k, e, jt)
 			end
 			squeeze(u_new(k,:,:));
 		end
@@ -187,7 +218,7 @@ function [u, g, L exitflag] = pmm_dir(Xi, u0, pi0)
 		it = it +1;
 
 		% if maximum iterations hit, set exitflag
-		if (it == maxiter)
+		if (it == args.max_iter)
 			exitflag = 0;
 		end
 	end

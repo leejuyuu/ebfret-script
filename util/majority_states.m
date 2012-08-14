@@ -1,5 +1,5 @@
-function [w, u, idxs] = majority_states(K, w, u, varargin)
-	% [w, u, idxs] = majority_states(K, w, u, varargin)
+function [w, u, mask] = majority_states(K, w, u, varargin)
+	% [w, u, mask] = majority_states(K, w, u, varargin)
 	%
 	% Finds K most populated states, and return a filtered 
 	% dataset that contains only the majority state data 
@@ -37,8 +37,8 @@ function [w, u, idxs] = majority_states(K, w, u, varargin)
     % u : struct
     %   Hyperparameters optimized from filtered VBEM output
     %
-    % idxs : (1xL)
-    %   Indices of selected traces
+    % mask : (1xL)
+    %   Mask for selected states
     %
     % Jan-Willem van de Meent
     % $Revision: 1.0$  $Date: 2011/02/14$
@@ -102,17 +102,17 @@ function [w, u, idxs] = majority_states(K, w, u, varargin)
         Xi_all = squeeze(sum(sum(Xi,1),2));
         outlier_points = Xi_all - Xi_top;
         % get indexes of traces that only have majority states
-        idxs = find(outlier_points <= args.max_outliers);
+        mask = outlier_points <= args.max_outliers;
     	% filter vbem output
-    	w = [w(idxs)];
+    	w = [w(find(mask))];
     	% project w and stat down to k states
 	    for n = 1:length(w)
 		    w(n) = filter_w(w(n), kdxs);
 		    %vb(n).stat = filter_stat(vb(n).stat, kdxs);
 	   	end
-        % construct new set of hyperparameters by running hstep update
+        % project hyperparameters
         u = filter_w(args.u, kdxs);
-        u = hstep_ml(w, u);
+        %u = hstep_ml(w, u);
 	else
 		idxs = 1:length(w);
 	end

@@ -87,7 +87,7 @@ for n = 1:N
 	                  'mu', zeros(K,1), ...
 	                  'Lambda', zeros(K,1));
 	% initial probabilities 
-	theta{n}.pi = dirrnd(u.pi');
+	theta{n}.pi = dirrnd(u.pi')';
 	% loop over states
 	for k = 1:K
 		%disp(sprintf('[debug] n: %d, k: %d', n, k))

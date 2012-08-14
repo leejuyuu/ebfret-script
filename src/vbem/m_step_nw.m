@@ -1,7 +1,8 @@
-function w = m_step(u, x, g, xi)
-    % w = m_step(u, g, xi)
+function w = m_step_nw(u, x, g)
+    % w = m_step_nw(u, x, g)
     %
-    % M-step: updates parameters w for q(theta | w)
+    % M-step: updates parameters w for q(theta | w) for a
+    % Normal-Wishart prior
     %
     % CB 10.60-10.63 and MJB 3.54 (JKC 25), 3.56 (JKC 21). 
 
@@ -9,22 +10,8 @@ function w = m_step(u, x, g, xi)
     [K D] = size(u.mu);
     [T] = length(x);
 
-    % this is necessary just so matlab does not complain about 
-    % structs being dissimilar because of the order of the fields
+    % initialize output (ensuring same fields as u)
     w = u;
-
-    % Update pi and A if xi counts supplied
-    if nargin > 3
-        % Update for pi
-        %
-        % w.pi(k) = u.pi(k) + g(1, k) 
-        w.pi = u.pi + g(1, :)'; 
-
-        % Update for A
-        %
-        % w.A(k, l) = u.A(k, l) + sum_t xi(t, k, l)
-        w.A = u.A + squeeze(sum(xi, 1));
-    end
 
     % Calculate expectation of sufficient statistics under q(z)
     %
@@ -51,16 +38,25 @@ function w = m_step(u, x, g, xi)
                                      reshape(dx, [K D 1 T]), ...
                                      reshape(dx, [K 1 D T]))), 4));
 
-    % Updates for beta and nu: Add counts for each state
+    % update for beta: Add counts for each state
     w.beta = u.beta + G;
-    w.nu = u.nu + G;
 
-    % Update for mu: Weighted average of u.mu and xmean
+    % update for mu: Weighted average of u.mu and xmean
     %
     % w.mu(k) = (u.beta(k) * u.mu(k) + G(k) * xmean(k))
     %           / (u.beta(k) + G(k))
-    w.mu = (u.beta .* u.mu + G .* xmean) ./ w.beta;
-                            
+    if D > 1
+        w.mu = bsxfun(@rdivide,  ...
+                      (bsxfun(@times, u.beta, u.mu) ...
+                       + bsxfun(@times, G, xmean)), ...
+                      w.beta);
+    else
+        w.mu = (u.beta .* u.mu + G .* xmean) ./ w.beta;
+    end
+
+    % update for nu: Add counts for each state
+    w.nu = u.nu + G;
+
     % Update for W:
     %
     % Inv(w.W(k, d, e)) = Inv(u.W(k, d, e)
@@ -75,14 +71,19 @@ function w = m_step(u, x, g, xi)
     xvar0 = bsxfun(@times, ...
                    reshape(dx0, [K D 1]), ...
                    reshape(dx0, [K 1 D]));
+
     % w.W = inv(inv(u.W)(k, d1, d2) + G(k) xsigma(k, d1, d2) 
     %           + ((u.beta(k) * G(k)) / w.beta(k)) xvar0(k, d1, d2))
     if D>1
-        w.W = arrayfun(@(k) inv(inv(u.W(k,:,:)) ... 
-                                + G(k) * xvar(k,:,:) ...
-                                + (u.beta(k) * G(k))/w.beta(k) ...
-                                   * xvar0(k,:,:)), ...
-                       (1:K)');
+        u.W = permute(u.W, [2 3 1]);
+        xvar = permute(xvar, [2 3 1]);
+        xvar0 = permute(xvar0, [2 3 1]);
+        for k = 1:K
+            w.W(k,:,:) = inv(inv(u.W(:,:,k)) ... 
+                                 + G(k) * xvar(:,:,k) ...
+                                 + (u.beta(k) * G(k)) / w.beta(k) ...
+                                    * xvar0(:,:,k));
+        end
     else
         w.W = 1 ./ (1 ./ u.W + G .* xvar ...
                     + (u.beta .* G) ./ w.beta .* xvar0);

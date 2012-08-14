@@ -1,17 +1,18 @@
-function [u, L, vb, vit, omega] = hmi(data, u0, w0, varargin)
-% [u, L, vb, vit, omega] = hmi(data, u0)
+function [u, L, vb, omega] = eb_shmm(data, u0, mu0, d, varargin)
+% [u, L, vb, omega] = eb_shmm(data, u0, mu0, d, varargin)
 %
-% Runs a hierarchical inference process on a collection of single 
-% molecule FRET time series (or traces) using a Hidden Markov Model.
+% Runs a empirical Bayes inferenceon a collection of single 
+% molecule time series using a Stepping Hidden Markov Model.
+% See vbem_shmm for further information.
 %
 % The inference process iteratively performs two steps:
 %
 % 1. Run Variational Bayes Expectation Maximization (VBEM)
 %    on each Time Series. 
 %
-%    This yields two distributions q(theta | w) and q(z) that approximate
-%    the posterior over the model parameters and latent states 
-%    for each trace.
+%    This yields two distributions q(theta | w) and q(z) that 
+%    approximate the posterior over the model parameters and latent 
+%    states for each trace.
 %
 % 2. Update the hyperparameters for the distribution p(theta | u).
 %
@@ -32,25 +33,26 @@ function [u, L, vb, vit, omega] = hmi(data, u0, w0, varargin)
 %     Initial guesses for hyperparameters of the ensemble distribution
 %     p(theta | u) over the model parameters.
 %
-%     .A : (K x K)
-%         Dirichlet prior for each row of transition matrix
-%     .pi : (K x 1)
-%         Dirichlet prior for initial state probabilities
-%     .mu : (K x D)
-%         Normal-Wishart prior - state means 
-%     .beta : (K x 1)
-%         Normal-Wishart prior - state occupation count
-%     .W : (K x D x D)
-%         Normal-Wishart prior - state precisions
-%     .nu : (K x 1)
-%         Normal-Wishart prior - degrees of freedom
-%         (must be equal to beta+1)
+%       .A : K x L
+%           Dirichlet prior on self and forward transitions. If K = 1, 
+%           the prior is assumed to be identical for all states
+%       .dmu : scalar
+%           Normal-Wishart prior - state offset 
+%       .beta : scalar
+%           Normal-Wishart prior - state occupation count
+%       .W : scalar
+%           Normal-Wishart prior - state precision
+%       .nu : scalar 
+%           Normal-Wishart prior - degrees of freedom
 %
 %     Note: The current implementation only supports D=1 signals
 %
 %   w0 : (N x M) or (N x 1) struct (optional)
 %     Intial guesses for variational parameters. 
 %    
+%   d : 1 x L
+%     Indices of accessible states relative to current state
+%     corresponding to the columns of u0.A
 %
 % Variable Inputs
 % ---------------
@@ -71,11 +73,6 @@ function [u, L, vb, vit, omega] = hmi(data, u0, w0, varargin)
 %     every hierarchical iteration (slower, but in some cases more 
 %     accurate).
 %
-%   soft_kmeans : {'off', 'init', 'always'} (default: 'init')
-%     Runs Gaussian Mixture Model EM algorithm on trace when
-%     initializing posterior parameters. Can be used on initial
-%     iteration only, or all iterations.
-%
 %   display : {'hstep', 'trace', 'off'} (default: 'off')
 %     Print status information.
 %
@@ -92,7 +89,7 @@ function [u, L, vb, vit, omega] = hmi(data, u0, w0, varargin)
 %
 %   L : (I x 1) 
 %     Total lower bound summed over all traces for each 
-%     HMI iteration 
+%     Empirical Bayes iteration 
 %
 %   vb : (N x M) struct
 %     Output of VBEM algorithm for each trace
@@ -130,34 +127,40 @@ ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);
-ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'mu'));
+ip.addRequired('mu0', @isnumeric);
+ip.addOptional('d', [], @isnumeric);
+ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'dmu'));
 ip.addParamValue('threshold', 1e-5, @isscalar);
 ip.addParamValue('max_iter', 100, @isscalar);
 ip.addParamValue('restarts', 10, @isscalar);
 ip.addParamValue('do_restarts', 'init', ...
                   @(s) any(strcmpi(s, {'always', 'init'})));
-ip.addParamValue('soft_kmeans', 'init', ...
-                  @(s) any(strcmpi(s, {'always', 'init', 'off'})));
 ip.addParamValue('display', 'off', ...
                   @(s) any(strcmpi(s, {'hstep', 'trace', 'off'})));
 ip.addParamValue('vbem', struct(), @isstruct);
-ip.parse(data, u0, w0, varargin{:});
+ip.parse(data, u0, mu0, varargin{:});
 
 try
     % collect inputs
     args = ip.Results;
     data = args.data;
     u0 = args.u0;
+    d = args.d;
 
     % get dimensions
     N = length(data);
     M = length(u0);
-    K = length(u0(1).pi);
+    K = size(mu0, 1);
+
+    % check if d specified
+    if ~length(d)
+        % assume d = [0 1 ... K-1]
+        d = 0:size(u0.A,2)-1;
+    end
 
     converged = false;
     it = 1;
     u(it, :) = u0;
-    clear w0;
 
     % main loop for hierarchical inference process
     omega.pi = ones(M,1) ./ M;
@@ -173,17 +176,14 @@ try
             % iteration is used in the fist restart
 
             if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-                fprintf('[%s] hmi: %d states, it %d, initializing w\n', ...
+                fprintf('[%s] eb: %d states, it %d, initializing w\n', ...
                          datestr(now, 'yymmdd HH:MM:SS'), K, it)
             end
-
-            % are we doing soft kmeans?
-            soft_kmeans = isequal(args.soft_kmeans, 'always') | ((it == 1) & isequal(args.soft_kmeans, 'init'));
 
             if (it == 1)
                 switch length(args.w0(:))
                     case N*M
-                        [w0(:, :, 1)] =  args.w0;
+                        [w0(:, :, 1)] =  reshape(args.w0, [N M]);
                     case N
                         for m = 1:M
                             [w0(:, m, 1)] =  args.w0(:);
@@ -191,11 +191,11 @@ try
                     otherwise
                         for n = 1:N
                             if strcmpi(args.display, 'trace')
-                                fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', ...
+                                fprintf('[%s] eb: %d states, it %d, trace %d of %d\n', ...
                                          datestr(now, 'yymmdd HH:MM:SS'), K, 0, n, N);
                             end    
                             for m = 1:M
-                                w0(n, m, 1) =  init_w(data{n}, u0(m), 'soft_kmeans', soft_kmeans);
+                                w0(n, m, 1) =  init_w_shmm(data{n}, u0(m));
                             end
                         end
                 end
@@ -210,7 +210,7 @@ try
                 for n = 1:N
                     for m = 1:M
                         % draw w0 from prior u for other restarts
-                        w0(n, m, r) = init_w(data{n}, u(it, m), 'soft_kmeans', soft_kmeans);
+                        w0(n, m, r) = init_w_shmm(data{n}, u(it, m));
                     end
                 end
             end
@@ -221,34 +221,50 @@ try
         end
 
         if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-            fprintf('[%s] hmi: %d states, it %d, running VBEM\n', ...
+            fprintf('[%s] eb: %d states, it %d, running VBEM\n', ...
                      datestr(now, 'yymmdd HH:MM:SS'), K, it)
         end
 
         % run vbem on each trace 
         L(it,:,:) = -Inf * ones(N, M);
-        for n = 1:N
+        w_it = cell(N, M);
+        stat_it = cell(N, M);
+        parfor n = 1:N
             if strcmpi(args.display, 'trace')
-                fprintf('[%s] hmi: %d states, it %d, trace %d of %d\n', ...
+                fprintf('[%s] eb: %d states, it %d, trace %d of %d\n', ...
                          datestr(now, 'yymmdd HH:MM:SS'), K, it, n, N);
             end 
             % loop over prior mixture components
             for m = 1:M
                 % loop over restarts
                 for r = 1:R
-                    [w_, L_, stat_] = vbem(data{n}, w0(n, m, r), u(it, m), args.vbem);
+                    [w_, L_, s_] = vbem_shmm(data{n}, ...
+                                             w0(n, m, r), u(it, m), ...
+                                             (1:K)', d, args.vbem);
                     % keep result if L better than previous restarts
-                    if L_(end) > L(it, n, m)
-                        w(it, n, m) = w_;
+                    if L_(end) > L(it, n, m) 
+                        w_it{n, m} = w_;
+                        s_it{n, m} = s_;
                         L(it, n, m) = L_(end);
+                        restart(n, m) = r;
+                    elseif r == 1
+                        % run did not converge, so store initial guess
+                        w_it{n, m} = w0(n, m, r);
+                        s_it{n, m} = s_;
                         restart(n, m) = r;
                     end
                 end
+                if L(it, n, m) == -Inf
+                    warning('eb_shmm:VBEMNotConverged', ...
+                            'VBEM did not converge for trace %d of %d\n', n, N)
+                end
             end
         end
+        w(it,:,:) = reshape([w_it{:}], size(w_it));
+        s(it,:,:) = reshape([s_it{:}], size(s_it));
 
         % calculate prior mixture responsiblities for each trace
-        Lit = reshape(L(it, :, :), [N M]);
+        Lit = reshape(L(it,:,:), [N M]);
         L0 = bsxfun(@minus, Lit , mean(Lit, 2));
         omega(it).gamma = normalize(bsxfun(@times, exp(L0), omega(it).pi'), 2);
         omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
@@ -257,7 +273,7 @@ try
         sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);
 
         if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
-            fprintf('[%s] hmi: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
+            fprintf('[%s] eb: %d states, it %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
                     datestr(now, 'yymmdd HH:MM:SS'), K, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
         end    
 
@@ -271,7 +287,8 @@ try
 
         % run hierarchical updates
         for m = 1:M
-            u(it+1, m) = hstep_ml(w(it, :, m), u(it, m), omega(it).gamma(:, m));
+            u_new = hstep_shmm(w(it, :, m), omega(it).gamma(:, m));
+            u(it+1, m) = u_new;
         end
 
         % proceed with next iteration
@@ -282,17 +299,18 @@ try
     for n = 1:N
         for m = 1:M
             vb(n,m) = struct('w', w(it,n,m), ...
+                             's', s(it,n,m), ...
                              'L', L(it,n,m), ...
                              'restart', restart(n,m));
         end
     end
 
-    % calculate viterbi paths
-    for n = 1:N
-        m = find(bsxfun(@eq, L(it,n,:), max(L(it,n,:))));
-        [vit(n).z, vit(n).x] = viterbi_vb(w(it,n,m), data{n});
-        vit(n).y = m; 
-    end 
+    % % calculate viterbi paths
+    % for n = 1:N
+    %     m = find(bsxfun(@eq, L(it,n,:), max(L(it,n,:))));
+    %     [vit(n).z, vit(n).x] = viterbi_vb(w(it,n,m), data{n});
+    %     vit(n).y = m; 
+    % end 
 
     % assign outputs
     L = sL(1:it);
@@ -301,8 +319,7 @@ try
 catch ME
     % ok something went wrong here, so dump workspace to disk for inspection
     day_time =  datestr(now, 'yymmdd-HH.MM');
-    save_name = sprintf('crashdump-hmi-%s.mat', day_time);
+    save_name = sprintf('crashdump-eb_shmm-%s.mat', day_time);
     save(save_name);
-
     rethrow(ME);
 end

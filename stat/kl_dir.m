@@ -1,5 +1,5 @@
-function D_kl = kl_dir(alpha_p, alpha_q)
-% D_kl = kl_dir(alpha_p, alpha_q)
+function D = kl_dir(alpha_p, alpha_q)
+% D = kl_dir(alpha_p, alpha_q)
 %
 % Returns Kullback-Leibler divergence 
 %
@@ -27,12 +27,15 @@ function D_kl = kl_dir(alpha_p, alpha_q)
 % $Revision: 1.0$ 
 % $Date: 2011/08/03$
 
-% figure out summation dim
-d = ndims(alpha_p);
-d = d - (size(alpha_p, d) == 1);
+% if inputs are vectors, reshape to 1 x K
+if sum(size(alpha_p)>1) <= 1
+    K = length(alpha_p(:));
+    alpha_p = reshape(alpha_p, [1 K]);
+    alpha_q = reshape(alpha_q, [1 K]);
+end
 
-Alpha_p = sum(alpha_p, d);
-Alpha_q = sum(alpha_q, d);
+% get summation dim
+d = ndims(alpha_p);
 
 % For each set of K parameters
 % 
@@ -42,7 +45,37 @@ Alpha_q = sum(alpha_q, d);
 %                    / Gamma(alpha_q(k)) ]
 %		 + sum_k (alpha_p(k) - alpha_q(k)) 
 %                (psi(alpha_p(k)) - psi(Alpha_p))
-D_kl = gammaln(Alpha_p) - gammaln(Alpha_q) ...
+D_kl = @(alpha_p, alpha_q, d) ...
+       gammaln(sum(alpha_p, d)) - gammaln(sum(alpha_q,d)) ...
        - sum(gammaln(alpha_p) - gammaln(alpha_q), d) ...
        + sum((alpha_p - alpha_q) .* ...
-             bsxfun(@minus, psi(alpha_p), psi(Alpha_p)), d);
+             bsxfun(@minus, psi(alpha_p), psi(sum(alpha_p, d))), d);
+
+% check for shared zero elements
+msk = (alpha_p == 0) & (alpha_q == 0);
+if any(msk(:))
+    sz = size(msk);
+    if length(sz) > 2
+        % reshape to L x K
+        L = prod(sz) / sz(d);
+        K = sz(d);
+        msk = reshape(msk, [L K]);
+        alpha_p = reshape(alpha_p, [L K]);
+        alpha_q = reshape(alpha_q, [L K]);
+    else
+        L = sz(1);
+        K = sz(2);
+    end
+    D = zeros(L,1);
+    for l = 1:L
+        kdxs = find(~msk(l,:));
+        D(l) = D_kl(alpha_p(l, kdxs), alpha_q(l, kdxs), 2);
+    end
+    if length(sz) > 2
+        % reshape D to original dimensions
+        D = reshape(D, sz(1:d-1));
+    end
+else
+    D = D_kl(alpha_p, alpha_q, d);
+end
+

@@ -1,7 +1,7 @@
-function runs = hmi_fret(x, K_values, restarts, varargin)
-    % hmi_fret(x, K_values, restarts, varargin)
+function runs = eb_fret(x, K_values, restarts, varargin)
+    % eb_fret(x, K_values, restarts, varargin)
     %
-    % Runs HMI inference on a set of FRET time series.
+    % Runs EB inference on a set of FRET time series.
     %
     % Inputs
     % ------
@@ -13,7 +13,7 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     %   Number of states to use for each run
     %
     % restarts : int
-    %   Number of HMI restarts to perform
+    %   Number of EB restarts to perform
     %
     % u0 : (1xR) struct (optional)
     %   Initial guess for hyperparameters to use for first restart
@@ -27,7 +27,7 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     % ---------------
     %
     % 'u0_strength' : float (default = 0.1)
-    %   Strength of hyperparameters used in each HMI restart.
+    %   Strength of hyperparameters used in each EB restart.
     %   Specified as a fraction of the mean trace length. 
     %
     %   Note: this value is currently only applied to the emission
@@ -36,8 +36,8 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     % 'num_cpu' : int (default = 1)
     %   Number of cpu's to use
     %
-    % 'hmi' : struct
-    %   Any options to pass to hmi algorithm
+    % 'eb' : struct
+    %   Any options to pass to eb algorithm
     %
     % 'vbem' : struct
     %   Any options to pass to vbem algorithm
@@ -47,7 +47,7 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     % -------
     % 
     % runs : (1xR) struct
-    %   Output of hmi run for each K value (see hmi.m)
+    %   Output of eb run for each K value (see eb_hmm.m)
     %
     %   .u struct
     %       Hyperparameters for ensemble distribution
@@ -72,7 +72,7 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     ip.addOptional('w0', struct(), @(w) isstruct(w) & isfield(w, 'mu'));
     ip.addParamValue('u0_strength', 0.1, @isscalar);
     ip.addParamValue('num_cpu', 1, @isscalar);
-    ip.addParamValue('hmi', struct(), @isstruct);
+    ip.addParamValue('eb', struct(), @isstruct);
     ip.addParamValue('vbem', struct(), @isstruct);
     ip.parse(x, K_values, restarts, varargin{:});
     opts = ip.Results;
@@ -83,11 +83,11 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     end
 
     % set defaults for any missing options
-    opts_hmi = hmi_defaults();
-    fnames = fieldnames(opts_hmi);
+    opts_eb = eb_defaults();
+    fnames = fieldnames(opts_eb);
     for f = 1:length(fnames)
-        if ~isfield(opts.hmi, fnames{f})
-            opts.hmi.(fnames{f}) = opts_hmi.(fnames{f});
+        if ~isfield(opts.eb, fnames{f})
+            opts.eb.(fnames{f}) = opts_eb.(fnames{f});
         end
     end
     opts_vbem = vbem_defaults();
@@ -128,7 +128,7 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
             end
         end
 
-        % run hmi for every set of hyperparameters
+        % run eb for every set of hyperparameters
         runs = cell(length(opts.K_values), 1);
         for k = 1:length(opts.K_values)
             rn = cell(opts.restarts, 1);
@@ -136,10 +136,10 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
                 rn{r} = struct();
                 if r == 1 & isfield(opts.w0, 'mu')
                     [rn{r}.u, rn{r}.L, rn{r}.vb, rn{r}.vit] = ...
-                        hmi(x, u0(k,r), opts.w0(:,k), opts.hmi, 'vbem', opts.vbem);
+                        eb_hmm(x, u0(k,r), opts.w0(:,k), opts.eb, 'vbem', opts.vbem);
                 else
                     [rn{r}.u, rn{r}.L, rn{r}.vb, rn{r}.vit] = ...
-                         hmi(x, u0(k,r), opts.hmi, 'vbem', opts.vbem);
+                        eb_hmm(x, u0(k,r), opts.eb, 'vbem', opts.vbem);
                 end
                 rn{r}.K = opts.K_values(k);
                 rn{r}.u0 = u0(k, r);
@@ -157,7 +157,7 @@ function runs = hmi_fret(x, K_values, restarts, varargin)
     catch ME
         % ok something went wrong here, so dump workspace to disk for inspection
         day_time =  datestr(now, 'yymmdd-HH.MM');
-        save_name = sprintf('crashdump-hmi_fret-%s.mat', day_time);
+        save_name = sprintf('crashdump-eb_fret-%s.mat', day_time);
         save(save_name);
 
         % close matlabpool if necessary

@@ -1,23 +1,10 @@
-function [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step(w, x)
-    % [E_ln_pi, E_ln_A, E_p_x_z] = e_step(w)
+function E_ln_px_z = e_step_nw(w, x)
+    % E_ln_px_z = e_step_nw(w, x)
     % 
-    % E-step of VBEM algorithm.
+    % E-step of VBEM algorithm for Normal-Wishart distribution.
 
     % get dimensions
     [K D] = size(w.mu);
-
-    % Expectation of log intial state priors pi under q(pi | w.pi) 
-    % (MJB 3.69, CB 10.66, JCK 41)
-    %
-    % E[ln(w.pi(k))]  =  Int d pi  Dir(pi | w.pi) ln(pi)
-    %                 =  psi(w.pi(k)) - psi(Sum_l w.pi(l)))
-    E_ln_pi = psi(w.pi) - psi(sum(w.pi)); 
-
-    % Expectation of log transition matrix A under q(A | w.A) 
-    % (MJB 3.70, JCK 42)
-    %
-    % E_ln_A(k, l)  =  psi(w.A(k,l)) - psi(Sum_l w.A(k,l))
-    E_ln_A = bsxfun(@minus, psi(w.A), psi(sum(w.A, 2)));
 
     % Expectation of log emission precision |Lambda| 
     % under q(W | w.W) (CB 10.65, JKC 44)
@@ -26,14 +13,27 @@ function [E_ln_pi, E_ln_A, E_ln_det_L, E_ln_px_z] = e_step(w, x)
     %                =  ln(|w.W|) + D ln(2) 
     %                   + Sum_d psi((w.nu(k) + 1 - d)/2)
     if D>1
-        E_ln_det_L = zeros(K, 1);  
-        for k=1:K
+        E_ln_det_L = zeros(length(w.nu), 1);  
+        for k=1:length(w.nu)
           E_ln_det_L(k) = log(det(w.W(k, :, :))) + D * log(2) + ...
-                          sum(psi((w.nu(k) + 1 - (1:D)) / 2), 2);
+                          sum(psi(0.5 * (w.nu(k) + 1 - (1:D))), 2);
         end
     else
-        E_ln_det_L = log(w.W) + D * log(2) + ...
-                     sum(psi(0.5 * bsxfun(@minus, w.nu + 1, (1:D))), 2);
+        E_ln_det_L = log(w.W) + log(2) + psi(0.5 * w.nu);
+    end 
+
+    % replicate w.nu w.beta w.W, and E_ln_det_L if necessary
+    if length(w.beta) == 1
+        w.beta = ones(K,1) * w.beta;
+    end
+    if length(w.nu) == 1
+        w.nu = ones(K,1) * w.nu;
+    end     
+    if length(w.W) == 1
+        w.W = bsxfun(@times, ones(K,1), w.W);
+    end
+    if length(E_ln_det_L) == 1
+        E_ln_det_L = ones(K,1) * E_ln_det_L;
     end
 
     % Expectation of Mahalanobis distance Delta^2 under q(theta | w)
