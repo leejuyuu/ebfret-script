@@ -31,6 +31,7 @@ function [u, L, vb, vit, phi] = eb_hmm(data, u0, varargin)
 %   u0 : (M x 1) struct 
 %     Initial guesses for hyperparameters of the ensemble distribution
 %     p(theta | u) over the model parameters (i.e. the VBEM prior).
+%     If M > 1 inference is performed over a mixture of priors.
 %
 %     .A : (K x K)
 %         Dirichlet prior for each row of transition matrix
@@ -47,13 +48,16 @@ function [u, L, vb, vit, phi] = eb_hmm(data, u0, varargin)
 %         (must be equal to beta+1)
 %
 %     Note: The current implementation only supports D=1 signals
-%
-%   w0 : (N x M) or (N x 1) struct (optional)
-%     Intial guesses for VBEM variational parameters. 
 %    
 %
 % Variable Inputs
 % ---------------
+%
+%   v0 : (1 x M) numeric
+%     Dirichlet prior mixture weights omega.
+%
+%   w0 : (N x M) or (N x 1) struct (optional)
+%     Intial guesses for VBEM variational parameters. 
 %
 %   threshold : float
 %     Convergence threshold. Execution halts when fractional increase 
@@ -131,7 +135,8 @@ ip = inputParser();
 ip.StructExpand = true;
 ip.addRequired('data', @iscell);
 ip.addRequired('u0', @isstruct);
-ip.addOptional('w0', struct([]), @(w) isstruct(w) & isfield(w, 'mu'));
+ip.addParamValue('v0', [], @isnumeric);
+ip.addParamValue('w0', struct(), @(w) isstruct(w) & isfield(w, 'mu'));
 ip.addParamValue('threshold', 1e-5, @isscalar);
 ip.addParamValue('max_iter', 100, @isscalar);
 ip.addParamValue('restarts', 10, @isscalar);
@@ -157,6 +162,14 @@ try
     M = length(u0);
     K = length(u0(1).pi);
 
+    % be forgiving if prior on omega not specified
+    if isempty(args.v0)
+        % assume prior on omega is uninformative
+        v0 = ones(size(u0));
+    else
+        v0 = args.v0(:);
+    end
+
     % main loop for empirical bayes inference process
     % (note: we check for convergence in loop)
     it = 1;
@@ -173,8 +186,8 @@ try
             % iteration is used in the fist restart
 
             if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-                fprintf('[%s] eb: %d states, it %d, initializing w\n', ...
-                         datestr(now, 'yymmdd HH:MM:SS'), K, it)
+                fprintf('[%s] eb: K %d, M %d, it %d, initializing w\n', ...
+                         datestr(now, 'yymmdd HH:MM:SS'), K, M, it)
             end
 
             % are we doing soft kmeans?
@@ -227,16 +240,16 @@ try
         end
 
         if (strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace'))
-            fprintf('[%s] eb: %d states, it %d, running VBEM\n', ...
-                     datestr(now, 'yymmdd HH:MM:SS'), K, it)
+            fprintf('[%s] eb: K %d, M %d, it %d, running VBEM\n', ...
+                     datestr(now, 'yymmdd HH:MM:SS'), K, M, it)
         end
 
         % run vbem on each trace 
         L(it,:,:) = -Inf * ones(N, M);
         for n = 1:N
             if strcmpi(args.display, 'trace')
-                fprintf('[%s] eb: %d states, it %d, trace %d of %d\n', ...
-                         datestr(now, 'yymmdd HH:MM:SS'), K, it, n, N);
+                fprintf('[%s] eb: K %d, M %d, it %d, trace %d of %d\n', ...
+                         datestr(now, 'yymmdd HH:MM:SS'), K, M, it, n, N);
             end 
             % loop over prior mixture components
             for m = 1:M
@@ -253,40 +266,57 @@ try
             end
         end
 
-        % normalize evidence to avoid underflow/overflow
-        L_it = reshape(L(it, :, :), [N M]);
-        L_it0 = bsxfun(@minus, L_it , mean(L_it, 2));
+        % VBEM updates for prior mixture components
+        %
+        % y(n) ~ Mult(omega)
+        % omega ~ Dir(v0)
+        %
+        % log q(y(n)) ~ Sum_m y(n,m) ( E_q(omega)[log omega(m)] + L(n,m) )
+        % log q(omega) ~ Sum_m E_q(y(n))[y(n,m)] log omega(n,m)
 
-        % EM updates for prior mixture components
         jt = 1;
         sL_(jt) = -inf;
-        omega = 1./M * ones(1, M);
+        v = (N / M) + v0;
         while true
-            % E-step: calculate exp value of y(m) under q(y),
-            % i.e. posterior p(y | x, omega)
+            % calculate log expectation value of omega under q(omega | v)
+            %
+            % E[log w(m)] = psi(v(m)) - psi(sum_m v(m))
+            E_ln_omega = bsxfun(@minus, psi(v), psi(sum(v)));
+
+            % update for q(y) 
+            %
+            % q(y(n)) ~ exp[ sum_m y(n,m) (L(n,m) + E[log omega(m)]) ]
+
+            % calculate q(y) up to constant and catch underflow/overflow
+            L_it = squeeze(L(it, :, :));
+            log_qy = bsxfun(@plus, L_it, E_ln_omega(:)');
+            qy0 = exp(bsxfun(@minus, log_qy, mean(log_qy, 2)));
+            qy0(isinf(qy0)) = 1/eps;
+            qy0(qy0 == 0) = eps;
+
+            % calculate expectation value of y(m) under q(y)
             %
             % phi(n,m) = E_q(y(n)) [y(n,m)]
-            %          = p(y(n)=m | x(n), omega)
-            
-            % calculate joint p(y, omega)
-            p_yo = bsxfun(@times, exp(L_it0), omega);
-            % catch overflows
-            p_yo(isinf(p_yo)) = 1 / eps;
-            % normalize to get posterior
-            phi = normalize(p_yo, 2);
+            %          = q_0(y(n)=m) / sum_l q_0(y(n)=l)
+            phi = normalize(qy0, 2);
             
             % calculate summed evidence
-            sL_(jt) = sum(sum(phi .* L_it, 2), 1);
+            %
+            % sL = sum_n,m phi(n,m) (L(n,m) + E[log omega(m)] - log(phi(n,m)))
+            %      - D_kl(q(omega) || p(omega))
+            sL_(jt) = sum(nan_to_zero(phi(:) .* (log_qy(:) - log(phi(:))))) - kl_dir(v, v0);
 
             % check for convergence
-            if ((jt > 1) ...
-                & abs(1 - sL_(jt-1) / sL_(jt)) < args.threshold) ...
-                | jt >= args.max_iter
+            if (jt > 1) ...
+               & (abs(1 - sL_(jt-1) / sL_(jt)) < args.threshold ...
+                  | jt > args.max_iter)
                 break;
             end
 
-            % M-step: update omega
-            omega = normalize(sum(phi, 1));
+            % update for v
+            %
+            % v(m) = sum_n phi(n,m) + v0(m)
+            v(:) = sum(phi, 1)' + v0(:);
 
             % increment loop counter
             jt = jt + 1;
@@ -295,8 +325,9 @@ try
         % store summed evidence
         sL(it) = sL_(jt);
 
+
         if strcmpi(args.display, 'hstep') | strcmpi(args.display, 'trace')
-            fprintf('[%s] eb K: %d, M: %d,  it: %d, L: %e, rel increase: %.2e, randomized: %.3f\n', ...
+            fprintf('[%s] eb: K %d, M %d, it %d, L %e, rel increase %.2e, randomized %.3f\n', ...
                     datestr(now, 'yymmdd HH:MM:SS'), K, M, it, sL(it), (sL(it)-sL(max(it-1,1)))/sL(it), sum(restart(:)~=1) / length(restart(:)));
         end    
 
