@@ -136,7 +136,7 @@ function runs = eb_fret(x, K_values, restarts, varargin)
                 rn{r} = struct();
                 if r == 1 & isfield(opts.w0, 'mu')
                     [rn{r}.u, rn{r}.L, rn{r}.vb, rn{r}.vit] = ...
-                        eb_hmm(x, u0(k,r), opts.w0(:,k), opts.eb, 'vbem', opts.vbem);
+                        eb_hmm(x, u0(k,r), 'w0', opts.w0(:,k), opts.eb, 'vbem', opts.vbem);
                 else
                     [rn{r}.u, rn{r}.L, rn{r}.vb, rn{r}.vit] = ...
                         eb_hmm(x, u0(k,r), opts.eb, 'vbem', opts.vbem);
