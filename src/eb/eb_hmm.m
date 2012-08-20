@@ -196,12 +196,12 @@ try
             clear w0;
             if (it == 1)
                 switch length(args.w0(:))
-                    case N*M
-                        [w0(:, :, 1)] = orderfields(args.w0, fieldnames(u0));
                     case N
                         for m = 1:M
                             [w0(:, m, 1)] =  orderfields(args.w0(:), fieldnames(u0));
                         end
+                    case N*M
+                        [w0(:, :, 1)] = reshape(orderfields(args.w0, fieldnames(u0)), [N M]);
                     otherwise
                         for n = 1:N
                             if strcmpi(args.display, 'trace')
@@ -288,7 +288,7 @@ try
             % q(y(n)) ~ exp[ sum_m y(n,m) (L(n,m) + E[log omega(m)]) ]
 
             % calculate q(y) up to constant and catch underflow/overflow
-            L_it = squeeze(L(it, :, :));
+            L_it = reshape(L(it, :, :), [N M]);
             log_qy = bsxfun(@plus, L_it, E_ln_omega(:)');
             qy0 = exp(bsxfun(@minus, log_qy, mean(log_qy, 2)));
             qy0(isinf(qy0)) = 1/eps;
@@ -388,7 +388,7 @@ try
 catch ME
     % ok something went wrong here, so dump workspace to disk for inspection
     day_time =  datestr(now, 'yymmdd-HH.MM');
-    save_name = sprintf('crashdump-eb-%s.mat', day_time);
+    save_name = sprintf('crashdump-eb_hmm-%s.mat', day_time);
     save(save_name);
 
     rethrow(ME);
