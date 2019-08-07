@@ -79,7 +79,7 @@ function runs = eb_fret(x, K_values, restarts, varargin)
 
     % open matlabpool if using mutliple CPU's
     if opts.num_cpu > 1
-        matlabpool('OPEN', 'local', opts.num_cpu);
+%         matlabpool('OPEN', 'local', opts.num_cpu);
     end
 
     % set defaults for any missing options
@@ -162,7 +162,7 @@ function runs = eb_fret(x, K_values, restarts, varargin)
 
         % close matlabpool if necessary
         if opts.num_cpu > 1
-            matlabpool('CLOSE');
+%             matlabpool('CLOSE');
         end
 
         rethrow(ME);
