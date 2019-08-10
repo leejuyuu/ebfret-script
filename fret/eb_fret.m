@@ -147,7 +147,8 @@ function runs = eb_fret(x, K_values, restarts, varargin)
             runs{k} = rn;
         end
         runs = cat(1, runs{:});
-        runs = reshape([runs{:}], [length(opts.K_values), opts.restarts]);
+        runs = reshape([runs{:}], [opts.restarts,length(opts.K_values) ]);
+        runs = runs';
 
         % keep best run
         L = arrayfun(@(r) r.L(end), runs);
