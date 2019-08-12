@@ -1,6 +1,14 @@
 
+*.asv
+
+*.dat
+
 *.ini
 
 *.mat
 
-*.asv
+*.docx
+
+*.xlsx
+
+*.tif
