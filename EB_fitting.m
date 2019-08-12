@@ -23,8 +23,8 @@ greenInput = num2cell(greenTracesOut',1);
 greenruns = eb_fret(greenInput, [1:maxState], restarts);
 toc
 % save('runstemp0810','runs');
-[greenVb, greenVit, greenSelection] = selectK(redruns);
-greenVit = scaleVitBack(greenVit, redscale);
+[greenVb, greenVit, greenSelection] = selectK(greenruns);
+greenVit = scaleVitBack(greenVit, greenscale);
 
 save('test0811_ebparam','greenruns','redruns','greenVit','redVit','greenSelection','redSelection');
 
