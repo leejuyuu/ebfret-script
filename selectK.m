@@ -1,5 +1,5 @@
 function [newVb, newVit, selection] = selectK(runs)
-% load('runstemp0810.mat');
+load('runstemp0810.mat');
 maxK = length(runs(:,1));
 nMols = length(runs(1).vb);
 selection = ones(1,nMols);
@@ -10,8 +10,8 @@ for iMol = 1:nMols
         % sigma 
         sigma = 1./(sqrt(runs(iK).vb(iMol).w.W.*runs(iK).vb(iMol).w.nu));
         mu = runs(iK).vb(iMol).w.mu;
-        if any(mu(1:end-1)+3*sigma(1:end-1) >= mu(2:end)) ||...
-                any(mu(2:end)-3*sigma(2:end) <= mu(1:end-1))                
+        if any(mu(1:end-1)+2.5*sigma(1:end-1) >= mu(2:end)) ||...
+                any(mu(2:end)-2.5*sigma(2:end) <= mu(1:end-1))                
             continue
         else
             % Criterion 2: any fitted state should occupy at least 40
