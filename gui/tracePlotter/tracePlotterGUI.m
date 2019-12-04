@@ -204,9 +204,9 @@ function tracePlotterGUI_PlotChanged(hObject, eventdata, handles)
 
             % plot mu posterior confidence intervals
             if isfield(d, 'w')
-                s_mu = sqrt(1 ./ (d.w.beta(k) .* d.w.W(k) .* (d.w.nu(k) - 2)));
-                l = scatter(t(:) .* nmsk(:), (d.x(:) - 2 .* s_mu) .* nmsk(:), 1, c(k,:), 'Filled');
-                l = scatter(t(:) .* nmsk(:), (d.x(:) + 2 .* s_mu) .* nmsk(:), 1, c(k,:), 'Filled');
+%                 s_mu = sqrt(1 ./ (d.w.beta(k) .* d.w.W(k) .* (d.w.nu(k) - 2)));
+%                 l = scatter(t(:) .* nmsk(:), (d.x(:) - 2 .* s_mu) .* nmsk(:), 1, c(k,:), 'Filled');
+%                 l = scatter(t(:) .* nmsk(:), (d.x(:) + 2 .* s_mu) .* nmsk(:), 1, c(k,:), 'Filled');
 
                 % % plot emission confidence intervals
                 s_x = 1./sqrt(d.w.nu(k) * d.w.W(k));
