@@ -79,11 +79,11 @@ function [w, u, mask] = majority_states(K, w, u, varargin)
 	    		case {'G', 'xmean', 'xvar'}
 	    			statf.(field) = stat.(field)(kdxs, :);
 				case {'gamma'}
-	    			statf.(field) = normalize(stat.(field)(:, kdxs), 2);
+	    			statf.(field) = normalize_old(stat.(field)(:, kdxs), 2);
 				case {'xi'}
 					xi = stat.(field)(:, kdxs, kdxs);
 					T = size(xi, 1);
-					xi = normalize(reshape(xi, [T k*k]), 2);
+					xi = normalize_old(reshape(xi, [T k*k]), 2);
 	    			statf.(field) = reshape(xi, [T, k, k]);
     		end
     	end

@@ -152,7 +152,7 @@ for it = 1:args.max_iter
     %
     % g(t, k) = px_z(t, k) * pi(k) 
     %           / sum_l px_z(t, l) * theta.pi(l)
-    g = normalize(bsxfun(@times, exp(ln_px_z0), theta.pi(:)'), 2);
+    g = normalize_old(bsxfun(@times, exp(ln_px_z0), theta.pi(:)'), 2);
 
     % Calculate log likelihood
     %
@@ -220,7 +220,7 @@ for it = 1:args.max_iter
     w = m_step_nw(u, x, g);
 
     % get map values
-    theta.pi = normalize(w.beta);
+    theta.pi = normalize_old(w.beta);
     theta.mu = w.mu;
     theta.Lambda = bsxfun(@times, w.W, w.nu);
 end

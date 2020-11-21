@@ -80,7 +80,7 @@ function [u, L] = init_u_pmm_dir(M, w, u, varargin)
             % randomize by draw from dirichlet               
             u_A0 = zeros(M, K, K);
             for m = 1:M
-                u_A0(m, :, :) = sum(args.u.A(:)) * normalize(dirrnd(args.u.A));
+                u_A0(m, :, :) = sum(args.u.A(:)) * normalize_old(dirrnd(args.u.A));
             end
         end
 

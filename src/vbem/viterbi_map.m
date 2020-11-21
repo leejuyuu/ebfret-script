@@ -49,9 +49,9 @@ function [z_hat x_hat] = viterbi_map(w, x)
 % get MAP estimates
 
 % initial state probabilities
-ln_pi = log(normalize(w.pi));
+ln_pi = log(normalize_old(w.pi));
 % transition matrix
-ln_A = log(normalize(w.A, 2));
+ln_A = log(normalize_old(w.A, 2));
 % emission levels
 mu = w.mu;
 

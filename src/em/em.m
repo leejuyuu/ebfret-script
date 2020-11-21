@@ -234,7 +234,7 @@ for it = 1:args.max_iter
     theta.pi = g_(1, :);
 
     % update for A
-    theta.A = normalize(squeeze(sum(xi_, 1)), 2);
+    theta.A = normalize_old(squeeze(sum(xi_, 1)), 2);
 
     % update for mu
     theta.mu = xmean;

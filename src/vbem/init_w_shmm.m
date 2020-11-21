@@ -47,7 +47,7 @@ function w = init_w_shmm(x, u, varargin)
     % check draws for NaN (possible if u.A close to zero)
     if any(isnan(theta.A))
         theta.A(isnan(theta.A)) = 1;
-        theta.A = normalize(theta.A, 2);
+        theta.A = normalize_old(theta.A, 2);
     end
 
     % add draw A ~ Dir(u.A) to prior with count (T-1)/K for each row  

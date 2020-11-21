@@ -266,8 +266,8 @@ try
         % calculate prior mixture responsiblities for each trace
         Lit = reshape(L(it,:,:), [N M]);
         L0 = bsxfun(@minus, Lit , mean(Lit, 2));
-        omega(it).gamma = normalize(bsxfun(@times, exp(L0), omega(it).pi'), 2);
-        omega(it+1).pi = normalize(sum(omega(it).gamma, 1))';
+        omega(it).gamma = normalize_old(bsxfun(@times, exp(L0), omega(it).pi'), 2);
+        omega(it+1).pi = normalize_old(sum(omega(it).gamma, 1))';
 
         % calculate summed evidence
         sL(it) = sum(sum(omega(it).gamma .* Lit, 2), 1);

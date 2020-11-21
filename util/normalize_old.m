@@ -1,4 +1,4 @@
-function [A0, C] = normalize(A, dim)
+function [A0, C] = normalize_old(A, dim)
 % [A0, C] = normalize(A, dim)
 %
 % Returns normalized array A0 and normalization const C. Array is

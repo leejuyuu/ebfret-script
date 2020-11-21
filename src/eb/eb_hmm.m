@@ -298,7 +298,7 @@ try
             %
             % phi(n,m) = E_q(y(n)) [y(n,m)]
             %          = q_0(y(n)=m) / sum_l q_0(y(n)=l)
-            phi = normalize(qy0, 2);
+            phi = normalize_old(qy0, 2);
             
             % calculate summed evidence
             %

@@ -74,7 +74,7 @@ function runs = eb_fret_pmm_dir(x, w, u, M_values, varargin)
             for m = 1:M_values(r)
                 % normalize prior on A if necessary
                 if opts.A_counts > 0
-                    runs(r).u0(m).A = opts.A_counts * normalize(runs(r).u0(m).A);
+                    runs(r).u0(m).A = opts.A_counts * normalize_old(runs(r).u0(m).A);
                 end
                 % ensure posterior counts for A are correct
                 runs(r).w0(:,m) = w;

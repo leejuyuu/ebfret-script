@@ -74,7 +74,7 @@ function w = init_w_hmm(x, u, varargin)
     end
     if any(isnan(theta.A))
         theta.A(isnan(theta.A)) = 1;
-        theta.A = normalize(theta.A, 2);
+        theta.A = normalize_old(theta.A, 2);
     end
     
     for k = 1:K

@@ -8,8 +8,8 @@ function [theta, sigma] = theta_map(w)
     for n = 1:length(w)
         K = length(w(n).pi);
         % calculate expectation values
-        theta(n).pi = normalize(w(n).pi);
-        theta(n).A = normalize(w(n).A, 2);
+        theta(n).pi = normalize_old(w(n).pi);
+        theta(n).A = normalize_old(w(n).A, 2);
         theta(n).mu = w(n).mu;
         for k = 1:K
             theta(n).Lambda(k, :, :) = w(n).W(k, :, :) .* w(n).nu(k);
