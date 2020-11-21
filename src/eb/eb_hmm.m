@@ -255,7 +255,13 @@ try
             for m = 1:M
                 % loop over restarts
                 for r = 1:R
+                    test_data = load('vbem_hmm_test_data.mat');
+                    test_data.input = [test_data.input, struct('data', data{n}, 'w0', w0(n, m, r), 'u', u(it, m), 'vbem', args.vbem)];
                     [w_, L_, stat_] = vbem_hmm(data{n}, w0(n, m, r), u(it, m), args.vbem);
+                    test_data.output = [test_data.output, struct('w_', w_, 'L_', L_, 'stat_', stat_)];
+                    input = test_data.input;
+                    output = test_data.output;
+                    save('vbem_hmm_test_data.mat', 'input', 'output');
                     % keep result if L better than previous restarts
                     if L_(end) > L(it, n, m)
                         w(it, n, m) = w_;
@@ -393,3 +399,6 @@ catch ME
 
     rethrow(ME);
 end
+
+end
+
